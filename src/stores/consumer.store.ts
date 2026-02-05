@@ -1,0 +1,89 @@
+import { create } from 'zustand'
+import type { ConsumerGroup, ConsumerGroupDetails, ResetOffsetOptions } from '../types/kafka.types'
+
+interface ConsumerState {
+  consumerGroups: ConsumerGroup[]
+  selectedGroupId: string | null
+  groupDetails: ConsumerGroupDetails | null
+  isLoading: boolean
+  error: string | null
+
+  // Actions
+  loadConsumerGroups: (connectionId: string) => Promise<void>
+  selectGroup: (groupId: string | null) => void
+  loadGroupDetails: (connectionId: string, groupId: string) => Promise<void>
+  deleteGroup: (connectionId: string, groupId: string) => Promise<void>
+  resetOffsets: (connectionId: string, groupId: string, topic: string, options: ResetOffsetOptions) => Promise<void>
+  reset: () => void
+}
+
+export const useConsumerStore = create<ConsumerState>((set) => ({
+  consumerGroups: [],
+  selectedGroupId: null,
+  groupDetails: null,
+  isLoading: false,
+  error: null,
+
+  loadConsumerGroups: async (connectionId) => {
+    set({ isLoading: true, error: null })
+    try {
+      const groups = await window.api.kafka.getConsumerGroups(connectionId)
+      set({ consumerGroups: groups.sort((a: ConsumerGroup, b: ConsumerGroup) => a.groupId.localeCompare(b.groupId)), isLoading: false })
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to load consumer groups', isLoading: false })
+    }
+  },
+
+  selectGroup: (groupId) => {
+    set({ selectedGroupId: groupId, groupDetails: null })
+  },
+
+  loadGroupDetails: async (connectionId, groupId) => {
+    set({ isLoading: true, error: null })
+    try {
+      const details = await window.api.kafka.getConsumerGroupDetails(connectionId, groupId)
+      set({ groupDetails: details, isLoading: false })
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to load group details', isLoading: false })
+    }
+  },
+
+  deleteGroup: async (connectionId, groupId) => {
+    set({ isLoading: true, error: null })
+    try {
+      await window.api.kafka.deleteConsumerGroup(connectionId, groupId)
+      set((state) => ({
+        consumerGroups: state.consumerGroups.filter((g) => g.groupId !== groupId),
+        selectedGroupId: state.selectedGroupId === groupId ? null : state.selectedGroupId,
+        groupDetails: state.selectedGroupId === groupId ? null : state.groupDetails,
+        isLoading: false
+      }))
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to delete consumer group', isLoading: false })
+      throw error
+    }
+  },
+
+  resetOffsets: async (connectionId, groupId, topic, options) => {
+    set({ isLoading: true, error: null })
+    try {
+      await window.api.kafka.resetOffsets(connectionId, groupId, topic, options)
+      // Reload group details after resetting offsets
+      const details = await window.api.kafka.getConsumerGroupDetails(connectionId, groupId)
+      set({ groupDetails: details, isLoading: false })
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to reset offsets', isLoading: false })
+      throw error
+    }
+  },
+
+  reset: () => {
+    set({
+      consumerGroups: [],
+      selectedGroupId: null,
+      groupDetails: null,
+      isLoading: false,
+      error: null
+    })
+  }
+}))
