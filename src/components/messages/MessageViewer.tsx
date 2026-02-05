@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
+import { Virtuoso } from 'react-virtuoso'
 import { useTopicStore } from '@/stores/topic.store'
 import { useConnectionStore } from '@/stores/connection.store'
 import { MessageFilters } from './MessageFilters'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatJson, formatTimestamp, tryParseJson } from '@/lib/utils'
@@ -10,6 +10,13 @@ import { RefreshCw, Copy, ChevronDown, ChevronRight, MessageSquare } from 'lucid
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/hooks/use-toast'
 import type { KafkaMessage, MessageOptions } from '@/types/kafka.types'
+
+interface ParsedMessage extends KafkaMessage {
+  parsedValue: unknown
+  isJson: boolean
+  messageId: string
+  stringifiedPreview: string
+}
 
 export function MessageViewer() {
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set())
@@ -21,35 +28,52 @@ export function MessageViewer() {
   const loadMessages = useTopicStore((state) => state.loadMessages)
   const activeConnectionId = useConnectionStore((state) => state.activeConnectionId)
 
-  const handleRefresh = async () => {
+  // Memoize parsed messages to avoid re-parsing JSON on every render
+  const parsedMessages = useMemo<ParsedMessage[]>(() => {
+    return messages.map((message) => {
+      const { parsed, isJson } = tryParseJson(message.value || '')
+      const stringified = isJson ? JSON.stringify(parsed) : (message.value || '')
+      return {
+        ...message,
+        parsedValue: parsed,
+        isJson,
+        messageId: `${message.partition}-${message.offset}`,
+        stringifiedPreview: stringified.substring(0, 100) + (stringified.length > 100 ? '...' : '')
+      }
+    })
+  }, [messages])
+
+  const handleRefresh = useCallback(async () => {
     if (!activeConnectionId || !selectedTopic) return
     await loadMessages(activeConnectionId, selectedTopic, filters)
-  }
+  }, [activeConnectionId, selectedTopic, filters, loadMessages])
 
-  const handleFilterChange = async (newFilters: MessageOptions) => {
+  const handleFilterChange = useCallback(async (newFilters: MessageOptions) => {
     setFilters(newFilters)
     if (!activeConnectionId || !selectedTopic) return
     await loadMessages(activeConnectionId, selectedTopic, newFilters)
-  }
+  }, [activeConnectionId, selectedTopic, loadMessages])
 
-  const toggleExpanded = (messageId: string) => {
-    const newExpanded = new Set(expandedMessages)
-    if (newExpanded.has(messageId)) {
-      newExpanded.delete(messageId)
-    } else {
-      newExpanded.add(messageId)
-    }
-    setExpandedMessages(newExpanded)
-  }
+  const toggleExpanded = useCallback((messageId: string) => {
+    setExpandedMessages((prev) => {
+      const newExpanded = new Set(prev)
+      if (newExpanded.has(messageId)) {
+        newExpanded.delete(messageId)
+      } else {
+        newExpanded.add(messageId)
+      }
+      return newExpanded
+    })
+  }, [])
 
-  const copyToClipboard = async (message: KafkaMessage) => {
+  const copyToClipboard = useCallback(async (message: ParsedMessage) => {
     const content = JSON.stringify(
       {
         partition: message.partition,
         offset: message.offset,
         timestamp: message.timestamp,
         key: message.key,
-        value: tryParseJson(message.value || '').parsed,
+        value: message.parsedValue,
         headers: message.headers
       },
       null,
@@ -57,9 +81,7 @@ export function MessageViewer() {
     )
     await navigator.clipboard.writeText(content)
     toast({ title: 'Copied', description: 'Message copied to clipboard' })
-  }
-
-  const getMessageId = (message: KafkaMessage) => `${message.partition}-${message.offset}`
+  }, [])
 
   return (
     <div className="flex h-full flex-col">
@@ -71,8 +93,8 @@ export function MessageViewer() {
         </Button>
       </div>
 
-      <ScrollArea className="flex-1 rounded-md border border-border">
-        {isLoadingMessages && messages.length === 0 ? (
+      <div className="flex-1 rounded-md border border-border overflow-hidden">
+        {isLoadingMessages && parsedMessages.length === 0 ? (
           <div className="divide-y divide-border">
             {[...Array(5)].map((_, i) => (
               <div key={i} className="flex items-start gap-2 p-3">
@@ -88,7 +110,7 @@ export function MessageViewer() {
               </div>
             ))}
           </div>
-        ) : messages.length === 0 ? (
+        ) : parsedMessages.length === 0 ? (
           <div className="flex h-full items-center justify-center py-12">
             <div className="text-center text-muted-foreground">
               <MessageSquare className="mx-auto h-8 w-8 mb-2 opacity-50" />
@@ -96,17 +118,16 @@ export function MessageViewer() {
             </div>
           </div>
         ) : (
-          <div className="divide-y divide-border">
-            {messages.map((message) => {
-              const messageId = getMessageId(message)
-              const isExpanded = expandedMessages.has(messageId)
-              const { parsed, isJson } = tryParseJson(message.value || '')
+          <Virtuoso
+            data={parsedMessages}
+            itemContent={(_, message) => {
+              const isExpanded = expandedMessages.has(message.messageId)
 
               return (
-                <div key={messageId} className="group">
+                <div className="group border-b border-border last:border-b-0">
                   <div
                     className="flex items-start gap-2 p-3 cursor-pointer hover:bg-accent/50 transition-colors"
-                    onClick={() => toggleExpanded(messageId)}
+                    onClick={() => toggleExpanded(message.messageId)}
                   >
                     <button className="mt-1 text-muted-foreground">
                       {isExpanded ? (
@@ -135,9 +156,7 @@ export function MessageViewer() {
                       </div>
 
                       <div className="mt-1 truncate font-mono text-sm text-muted-foreground">
-                        {isJson
-                          ? JSON.stringify(parsed).substring(0, 100) + (JSON.stringify(parsed).length > 100 ? '...' : '')
-                          : message.value?.substring(0, 100) || '(empty)'}
+                        {message.stringifiedPreview || '(empty)'}
                       </div>
                     </div>
 
@@ -160,7 +179,7 @@ export function MessageViewer() {
                         <div>
                           <h4 className="text-xs font-medium text-muted-foreground mb-1">Value</h4>
                           <pre className="json-viewer overflow-auto rounded-md bg-background p-3 text-sm">
-                            {isJson ? formatJson(message.value || '') : message.value || '(empty)'}
+                            {message.isJson ? formatJson(message.value || '') : message.value || '(empty)'}
                           </pre>
                         </div>
 
@@ -192,10 +211,10 @@ export function MessageViewer() {
                   )}
                 </div>
               )
-            })}
-          </div>
+            }}
+          />
         )}
-      </ScrollArea>
+      </div>
 
       <div className="flex items-center justify-between pt-2 text-xs text-muted-foreground">
         <span>{messages.length} messages loaded</span>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Search, Plus, RefreshCw, Database, Trash2, Inbox } from 'lucide-react'
 import { useTopicStore } from '@/stores/topic.store'
 import { useConnectionStore } from '@/stores/connection.store'
@@ -48,8 +48,9 @@ export function TopicList() {
 
   const activeConnectionId = useConnectionStore((state) => state.activeConnectionId)
 
-  const filteredTopics = topics.filter((topic) =>
-    topic.toLowerCase().includes(search.toLowerCase())
+  const filteredTopics = useMemo(
+    () => topics.filter((topic) => topic.toLowerCase().includes(search.toLowerCase())),
+    [topics, search]
   )
 
   const handleSelectTopic = async (topic: string) => {

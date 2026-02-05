@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Search, RefreshCw, Users, Trash2, Inbox } from 'lucide-react'
 import { useConsumerStore } from '@/stores/consumer.store'
 import { useConnectionStore } from '@/stores/connection.store'
@@ -38,8 +38,9 @@ export function ConsumerGroupList() {
 
   const activeConnectionId = useConnectionStore((state) => state.activeConnectionId)
 
-  const filteredGroups = consumerGroups.filter((group) =>
-    group.groupId.toLowerCase().includes(search.toLowerCase())
+  const filteredGroups = useMemo(
+    () => consumerGroups.filter((group) => group.groupId.toLowerCase().includes(search.toLowerCase())),
+    [consumerGroups, search]
   )
 
   const handleSelectGroup = async (groupId: string) => {

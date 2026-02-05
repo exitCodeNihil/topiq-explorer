@@ -1,4 +1,5 @@
 import { Kafka, Admin, Producer, Consumer, logLevel, SASLOptions } from 'kafkajs'
+import { randomUUID } from 'crypto'
 
 interface KafkaConnection {
   id: string
@@ -118,6 +119,11 @@ export class KafkaService {
     this.instances.delete(connectionId)
   }
 
+  async disconnectAll(): Promise<void> {
+    const connectionIds = Array.from(this.instances.keys())
+    await Promise.all(connectionIds.map((id) => this.disconnect(id)))
+  }
+
   private getInstance(connectionId: string): KafkaInstance {
     const instance = this.instances.get(connectionId)
     if (!instance) {
@@ -187,7 +193,9 @@ export class KafkaService {
     const { kafka, admin } = this.getInstance(connectionId)
     const { partition, fromOffset, fromTimestamp, limit = 100 } = options
 
-    const groupId = `kafka-explorer-consumer-${Date.now()}`
+    // Hard cap at 500 messages maximum
+    const maxLimit = Math.min(limit, 500)
+    const groupId = `kafka-explorer-consumer-${randomUUID()}`
     const consumer = kafka.consumer({ groupId })
 
     try {
@@ -214,46 +222,72 @@ export class KafkaService {
         headers: Record<string, string>
       }> = []
 
-      return new Promise((resolve, _reject) => {
+      return new Promise((resolve, reject) => {
         let messageCount = 0
+        let lastOffset: string | null = null
+        let lastPartition: number | null = null
+
         const timeout = setTimeout(() => {
-          consumer.disconnect().then(() => resolve(messages))
+          consumer.disconnect().then(() =>
+            resolve({
+              messages,
+              hasMore: false,
+              nextOffset: null
+            })
+          )
         }, 5000)
 
-        consumer.run({
-          eachMessage: async ({ partition: msgPartition, message }) => {
-            if (messageCount >= limit) {
-              clearTimeout(timeout)
-              await consumer.disconnect()
-              resolve(messages)
-              return
-            }
+        consumer
+          .run({
+            eachMessage: async ({ partition: msgPartition, message }) => {
+              if (messageCount >= maxLimit) {
+                clearTimeout(timeout)
+                await consumer.disconnect()
+                resolve({
+                  messages,
+                  hasMore: true,
+                  nextOffset: lastOffset ? String(BigInt(lastOffset) + 1n) : null,
+                  nextPartition: lastPartition
+                })
+                return
+              }
 
-            const headers: Record<string, string> = {}
-            if (message.headers) {
-              for (const [key, value] of Object.entries(message.headers)) {
-                headers[key] = value?.toString() || ''
+              const headers: Record<string, string> = {}
+              if (message.headers) {
+                for (const [key, value] of Object.entries(message.headers)) {
+                  headers[key] = value?.toString() || ''
+                }
+              }
+
+              messages.push({
+                partition: msgPartition,
+                offset: message.offset,
+                timestamp: message.timestamp,
+                key: message.key?.toString() || null,
+                value: message.value?.toString() || null,
+                headers
+              })
+
+              messageCount++
+              lastOffset = message.offset
+              lastPartition = msgPartition
+
+              if (messageCount >= maxLimit) {
+                clearTimeout(timeout)
+                await consumer.disconnect()
+                resolve({
+                  messages,
+                  hasMore: true,
+                  nextOffset: String(BigInt(lastOffset) + 1n),
+                  nextPartition: lastPartition
+                })
               }
             }
-
-            messages.push({
-              partition: msgPartition,
-              offset: message.offset,
-              timestamp: message.timestamp,
-              key: message.key?.toString() || null,
-              value: message.value?.toString() || null,
-              headers
-            })
-
-            messageCount++
-
-            if (messageCount >= limit) {
-              clearTimeout(timeout)
-              await consumer.disconnect()
-              resolve(messages)
-            }
-          }
-        })
+          })
+          .catch((error) => {
+            clearTimeout(timeout)
+            consumer.disconnect().then(() => reject(error))
+          })
       })
     } catch (error) {
       await consumer.disconnect()
@@ -299,7 +333,36 @@ export class KafkaService {
 
     const group = description.groups[0]
 
-    const topicOffsets: Record<string, Array<{ partition: number; offset: string; lag: number }>> = {}
+    // Batch fetch all topic offsets at once to avoid N+1 queries
+    const topics = [...new Set(offsets.map((o) => o.topic))]
+    const topicHighOffsetsMap: Record<string, Array<{ partition: number; high: string }>> = {}
+
+    try {
+      // Fetch all topic offsets in parallel (single batch operation)
+      const allTopicOffsets = await Promise.all(
+        topics.map(async (topic) => {
+          try {
+            const offsets = await admin.fetchTopicOffsets(topic)
+            return { topic, offsets, error: null }
+          } catch (error) {
+            return { topic, offsets: null, error }
+          }
+        })
+      )
+
+      for (const result of allTopicOffsets) {
+        if (result.offsets) {
+          topicHighOffsetsMap[result.topic] = result.offsets.map((o) => ({
+            partition: o.partition,
+            high: o.high || '0'
+          }))
+        }
+      }
+    } catch {
+      // If batch fetch fails, continue with empty map (lag will be null)
+    }
+
+    const topicOffsets: Record<string, Array<{ partition: number; offset: string; lag: number | null }>> = {}
 
     for (const topicOffset of offsets) {
       const topic = topicOffset.topic
@@ -307,10 +370,10 @@ export class KafkaService {
         topicOffsets[topic] = []
       }
 
-      try {
-        const topicHighOffsets = await admin.fetchTopicOffsets(topic)
+      const topicHighOffsets = topicHighOffsetsMap[topic]
 
-        for (const partitionData of topicOffset.partitions) {
+      for (const partitionData of topicOffset.partitions) {
+        if (topicHighOffsets) {
           const partitionInfo = topicHighOffsets.find((p) => p.partition === partitionData.partition)
           const currentOffset = parseInt(partitionData.offset, 10)
           const highOffset = parseInt(partitionInfo?.high || '0', 10)
@@ -321,13 +384,12 @@ export class KafkaService {
             offset: partitionData.offset,
             lag
           })
-        }
-      } catch {
-        for (const partitionData of topicOffset.partitions) {
+        } else {
+          // Return null for lag when we couldn't fetch offsets (not 0, which is misleading)
           topicOffsets[topic].push({
             partition: partitionData.partition,
             offset: partitionData.offset,
-            lag: 0
+            lag: null
           })
         }
       }

@@ -52,6 +52,10 @@ app.on('window-all-closed', () => {
   }
 })
 
+app.on('before-quit', async () => {
+  await kafkaService.disconnectAll()
+})
+
 // Connection IPC Handlers
 ipcMain.handle('connections:getAll', () => {
   return connectionStore.getAll()
@@ -107,7 +111,11 @@ ipcMain.handle('kafka:deleteTopic', async (_, connectionId: string, topic: strin
 })
 
 ipcMain.handle('kafka:getMessages', async (_, connectionId: string, topic: string, options) => {
-  return kafkaService.getMessages(connectionId, topic, options)
+  try {
+    return { success: true, data: await kafkaService.getMessages(connectionId, topic, options) }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to get messages' }
+  }
 })
 
 ipcMain.handle('kafka:produceMessage', async (_, connectionId: string, topic: string, message) => {
@@ -119,7 +127,11 @@ ipcMain.handle('kafka:getConsumerGroups', async (_, connectionId: string) => {
 })
 
 ipcMain.handle('kafka:getConsumerGroupDetails', async (_, connectionId: string, groupId: string) => {
-  return kafkaService.getConsumerGroupDetails(connectionId, groupId)
+  try {
+    return { success: true, data: await kafkaService.getConsumerGroupDetails(connectionId, groupId) }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to get consumer group details' }
+  }
 })
 
 ipcMain.handle('kafka:deleteConsumerGroup', async (_, connectionId: string, groupId: string) => {

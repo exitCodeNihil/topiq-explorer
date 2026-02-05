@@ -7,7 +7,10 @@ interface TopicState {
   topicMetadata: TopicMetadata | null
   topicConfig: ConfigEntry[]
   messages: KafkaMessage[]
-  isLoading: boolean
+  isLoading: boolean // Kept for backward compatibility
+  isLoadingTopics: boolean
+  isLoadingMetadata: boolean
+  isLoadingConfig: boolean
   isLoadingMessages: boolean
   error: string | null
 
@@ -31,16 +34,19 @@ export const useTopicStore = create<TopicState>((set) => ({
   topicConfig: [],
   messages: [],
   isLoading: false,
+  isLoadingTopics: false,
+  isLoadingMetadata: false,
+  isLoadingConfig: false,
   isLoadingMessages: false,
   error: null,
 
   loadTopics: async (connectionId) => {
-    set({ isLoading: true, error: null })
+    set({ isLoadingTopics: true, isLoading: true, error: null })
     try {
       const topics = await window.api.kafka.getTopics(connectionId)
-      set({ topics: topics.sort(), isLoading: false })
+      set({ topics: topics.sort(), isLoadingTopics: false, isLoading: false })
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to load topics', isLoading: false })
+      set({ error: error instanceof Error ? error.message : 'Failed to load topics', isLoadingTopics: false, isLoading: false })
     }
   },
 
@@ -49,48 +55,49 @@ export const useTopicStore = create<TopicState>((set) => ({
   },
 
   loadTopicMetadata: async (connectionId, topic) => {
-    set({ isLoading: true, error: null })
+    set({ isLoadingMetadata: true, error: null })
     try {
       const metadata = await window.api.kafka.getTopicMetadata(connectionId, topic)
-      set({ topicMetadata: metadata, isLoading: false })
+      set({ topicMetadata: metadata, isLoadingMetadata: false })
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to load topic metadata', isLoading: false })
+      set({ error: error instanceof Error ? error.message : 'Failed to load topic metadata', isLoadingMetadata: false })
     }
   },
 
   loadTopicConfig: async (connectionId, topic) => {
-    set({ isLoading: true, error: null })
+    set({ isLoadingConfig: true, error: null })
     try {
       const config = await window.api.kafka.getTopicConfig(connectionId, topic)
-      set({ topicConfig: config, isLoading: false })
+      set({ topicConfig: config, isLoadingConfig: false })
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to load topic config', isLoading: false })
+      set({ error: error instanceof Error ? error.message : 'Failed to load topic config', isLoadingConfig: false })
     }
   },
 
   createTopic: async (connectionId, config) => {
-    set({ isLoading: true, error: null })
+    set({ isLoadingTopics: true, isLoading: true, error: null })
     try {
       await window.api.kafka.createTopic(connectionId, config)
       const topics = await window.api.kafka.getTopics(connectionId)
-      set({ topics: topics.sort(), isLoading: false })
+      set({ topics: topics.sort(), isLoadingTopics: false, isLoading: false })
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to create topic', isLoading: false })
+      set({ error: error instanceof Error ? error.message : 'Failed to create topic', isLoadingTopics: false, isLoading: false })
       throw error
     }
   },
 
   deleteTopic: async (connectionId, topic) => {
-    set({ isLoading: true, error: null })
+    set({ isLoadingTopics: true, isLoading: true, error: null })
     try {
       await window.api.kafka.deleteTopic(connectionId, topic)
       set((state) => ({
         topics: state.topics.filter((t) => t !== topic),
         selectedTopic: state.selectedTopic === topic ? null : state.selectedTopic,
+        isLoadingTopics: false,
         isLoading: false
       }))
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to delete topic', isLoading: false })
+      set({ error: error instanceof Error ? error.message : 'Failed to delete topic', isLoadingTopics: false, isLoading: false })
       throw error
     }
   },
@@ -98,8 +105,25 @@ export const useTopicStore = create<TopicState>((set) => ({
   loadMessages: async (connectionId, topic, options) => {
     set({ isLoadingMessages: true, error: null })
     try {
-      const messages = await window.api.kafka.getMessages(connectionId, topic, options)
-      set({ messages, isLoadingMessages: false })
+      const result = await window.api.kafka.getMessages(connectionId, topic, options) as unknown
+      // Handle structured response format from IPC handler
+      if (result && typeof result === 'object' && 'success' in result) {
+        const typedResult = result as { success: boolean; error?: string; data?: { messages: KafkaMessage[] } }
+        if (!typedResult.success) {
+          throw new Error(typedResult.error || 'Failed to load messages')
+        }
+        // New format: { success: true, data: { messages, hasMore, nextOffset } }
+        const messages = typedResult.data?.messages ?? []
+        set({ messages, isLoadingMessages: false })
+      } else if (Array.isArray(result)) {
+        // Legacy format: direct array
+        set({ messages: result as KafkaMessage[], isLoadingMessages: false })
+      } else {
+        // Fallback for other formats
+        const typedResult = result as { messages?: KafkaMessage[] }
+        const messages = typedResult?.messages ?? []
+        set({ messages, isLoadingMessages: false })
+      }
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to load messages', isLoadingMessages: false })
     }
@@ -128,6 +152,9 @@ export const useTopicStore = create<TopicState>((set) => ({
       topicConfig: [],
       messages: [],
       isLoading: false,
+      isLoadingTopics: false,
+      isLoadingMetadata: false,
+      isLoadingConfig: false,
       isLoadingMessages: false,
       error: null
     })

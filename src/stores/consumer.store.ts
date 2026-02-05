@@ -41,8 +41,17 @@ export const useConsumerStore = create<ConsumerState>((set) => ({
   loadGroupDetails: async (connectionId, groupId) => {
     set({ isLoading: true, error: null })
     try {
-      const details = await window.api.kafka.getConsumerGroupDetails(connectionId, groupId)
-      set({ groupDetails: details, isLoading: false })
+      const result = await window.api.kafka.getConsumerGroupDetails(connectionId, groupId)
+      // Handle structured response format from IPC handler
+      if (result && typeof result === 'object' && 'success' in result) {
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to load group details')
+        }
+        set({ groupDetails: result.data, isLoading: false })
+      } else {
+        // Fallback for direct response
+        set({ groupDetails: result, isLoading: false })
+      }
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to load group details', isLoading: false })
     }
@@ -69,8 +78,16 @@ export const useConsumerStore = create<ConsumerState>((set) => ({
     try {
       await window.api.kafka.resetOffsets(connectionId, groupId, topic, options)
       // Reload group details after resetting offsets
-      const details = await window.api.kafka.getConsumerGroupDetails(connectionId, groupId)
-      set({ groupDetails: details, isLoading: false })
+      const result = await window.api.kafka.getConsumerGroupDetails(connectionId, groupId)
+      // Handle structured response format from IPC handler
+      if (result && typeof result === 'object' && 'success' in result) {
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to load group details')
+        }
+        set({ groupDetails: result.data, isLoading: false })
+      } else {
+        set({ groupDetails: result, isLoading: false })
+      }
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to reset offsets', isLoading: false })
       throw error
