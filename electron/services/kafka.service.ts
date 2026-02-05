@@ -29,7 +29,7 @@ interface MessageOptions {
 
 interface ProduceMessage {
   key?: string
-  value: string
+  value: string | null
   headers?: Record<string, string>
   partition?: number
 }
@@ -470,6 +470,21 @@ export class KafkaService {
   async deleteConsumerGroup(connectionId: string, groupId: string): Promise<void> {
     const { admin } = this.getInstance(connectionId)
     await admin.deleteGroups([groupId])
+  }
+
+  async deleteRecords(
+    connectionId: string,
+    topic: string,
+    partitionOffsets: { partition: number; offset: string }[]
+  ): Promise<void> {
+    const { admin } = this.getInstance(connectionId)
+    await admin.deleteTopicRecords({
+      topic,
+      partitions: partitionOffsets.map(({ partition, offset }) => ({
+        partition,
+        offset
+      }))
+    })
   }
 
   async resetOffsets(

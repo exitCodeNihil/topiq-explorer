@@ -34,7 +34,7 @@ interface MessageOptions {
 
 interface ProduceMessage {
   key?: string
-  value: string
+  value: string | null
   headers?: Record<string, string>
   partition?: number
 }
@@ -44,6 +44,37 @@ interface ResetOffsetOptions {
   timestamp?: number
   offset?: string
   partitions?: number[]
+}
+
+type UpdateChannel = 'stable' | 'beta' | 'alpha'
+
+interface UpdateCheckResult {
+  updateAvailable: boolean
+  version: string
+  releaseNotes?: string
+  releaseDate?: string
+}
+
+interface DownloadProgress {
+  bytesPerSecond: number
+  percent: number
+  transferred: number
+  total: number
+}
+
+interface UpdaterApi {
+  checkForUpdates: () => Promise<UpdateCheckResult>
+  downloadUpdate: () => Promise<{ success: boolean }>
+  installUpdate: () => Promise<void>
+  getVersion: () => Promise<string>
+  getChannel: () => Promise<UpdateChannel>
+  setChannel: (channel: UpdateChannel) => Promise<UpdateChannel>
+  onCheckingForUpdate: (callback: () => void) => () => void
+  onUpdateAvailable: (callback: (info: UpdateCheckResult) => void) => () => void
+  onUpdateNotAvailable: (callback: () => void) => () => void
+  onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void
+  onUpdateDownloaded: (callback: (info: UpdateCheckResult) => void) => () => void
+  onError: (callback: (error: string) => void) => () => void
 }
 
 interface WindowApi {
@@ -68,7 +99,9 @@ interface WindowApi {
     getConsumerGroupDetails: (connectionId: string, groupId: string) => Promise<any>
     deleteConsumerGroup: (connectionId: string, groupId: string) => Promise<void>
     resetOffsets: (connectionId: string, groupId: string, topic: string, options: ResetOffsetOptions) => Promise<void>
+    deleteRecords: (connectionId: string, topic: string, partitionOffsets: { partition: number; offset: string }[]) => Promise<void>
   }
+  updater: UpdaterApi
 }
 
 declare global {

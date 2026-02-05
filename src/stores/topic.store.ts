@@ -1,12 +1,20 @@
 import { create } from 'zustand'
 import type { TopicMetadata, ConfigEntry, KafkaMessage, TopicConfig, MessageOptions, ProduceMessage } from '../types/kafka.types'
 
+interface MessageToRepublish {
+  key?: string
+  value: string
+  headers?: Record<string, string>
+  partition?: number
+}
+
 interface TopicState {
   topics: string[]
   selectedTopic: string | null
   topicMetadata: TopicMetadata | null
   topicConfig: ConfigEntry[]
   messages: KafkaMessage[]
+  messageToRepublish: MessageToRepublish | null
   isLoading: boolean // Kept for backward compatibility
   isLoadingTopics: boolean
   isLoadingMetadata: boolean
@@ -23,6 +31,7 @@ interface TopicState {
   deleteTopic: (connectionId: string, topic: string) => Promise<void>
   loadMessages: (connectionId: string, topic: string, options?: MessageOptions) => Promise<void>
   produceMessage: (connectionId: string, topic: string, message: ProduceMessage) => Promise<void>
+  setMessageToRepublish: (message: MessageToRepublish | null) => void
   clearMessages: () => void
   reset: () => void
 }
@@ -33,6 +42,7 @@ export const useTopicStore = create<TopicState>((set) => ({
   topicMetadata: null,
   topicConfig: [],
   messages: [],
+  messageToRepublish: null,
   isLoading: false,
   isLoadingTopics: false,
   isLoadingMetadata: false,
@@ -140,6 +150,10 @@ export const useTopicStore = create<TopicState>((set) => ({
     }
   },
 
+  setMessageToRepublish: (message) => {
+    set({ messageToRepublish: message })
+  },
+
   clearMessages: () => {
     set({ messages: [] })
   },
@@ -151,6 +165,7 @@ export const useTopicStore = create<TopicState>((set) => ({
       topicMetadata: null,
       topicConfig: [],
       messages: [],
+      messageToRepublish: null,
       isLoading: false,
       isLoadingTopics: false,
       isLoadingMetadata: false,

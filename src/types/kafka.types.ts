@@ -67,7 +67,7 @@ export interface MessageOptions {
 
 export interface ProduceMessage {
   key?: string
-  value: string
+  value: string | null
   headers?: Record<string, string>
   partition?: number
 }

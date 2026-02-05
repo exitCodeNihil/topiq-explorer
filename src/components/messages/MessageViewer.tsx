@@ -6,9 +6,25 @@ import { MessageFilters } from './MessageFilters'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatJson, formatTimestamp, tryParseJson } from '@/lib/utils'
-import { RefreshCw, Copy, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react'
+import { RefreshCw, Copy, ChevronDown, ChevronRight, MessageSquare, Trash2, RotateCcw, Loader2 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/hooks/use-toast'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from '@/components/ui/tooltip'
 import type { KafkaMessage, MessageOptions } from '@/types/kafka.types'
 
 interface ParsedMessage extends KafkaMessage {
@@ -21,11 +37,15 @@ interface ParsedMessage extends KafkaMessage {
 export function MessageViewer() {
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set())
   const [filters, setFilters] = useState<MessageOptions>({ limit: 100 })
+  const [tombstoneMessage, setTombstoneMessage] = useState<ParsedMessage | null>(null)
+  const [isSendingTombstone, setIsSendingTombstone] = useState(false)
 
   const messages = useTopicStore((state) => state.messages)
   const isLoadingMessages = useTopicStore((state) => state.isLoadingMessages)
   const selectedTopic = useTopicStore((state) => state.selectedTopic)
   const loadMessages = useTopicStore((state) => state.loadMessages)
+  const produceMessage = useTopicStore((state) => state.produceMessage)
+  const setMessageToRepublish = useTopicStore((state) => state.setMessageToRepublish)
   const activeConnectionId = useConnectionStore((state) => state.activeConnectionId)
 
   // Memoize parsed messages to avoid re-parsing JSON on every render
@@ -82,6 +102,47 @@ export function MessageViewer() {
     await navigator.clipboard.writeText(content)
     toast({ title: 'Copied', description: 'Message copied to clipboard' })
   }, [])
+
+  const handleTombstone = useCallback(async () => {
+    if (!activeConnectionId || !selectedTopic || !tombstoneMessage?.key) return
+
+    setIsSendingTombstone(true)
+    try {
+      await produceMessage(activeConnectionId, selectedTopic, {
+        key: tombstoneMessage.key,
+        value: null,
+        partition: tombstoneMessage.partition
+      })
+
+      toast({
+        title: 'Tombstone Sent',
+        description: `Tombstone message sent for key "${tombstoneMessage.key}"`
+      })
+
+      // Refresh messages
+      await loadMessages(activeConnectionId, selectedTopic, filters)
+    } catch (error) {
+      toast({
+        title: 'Tombstone Failed',
+        description: error instanceof Error ? error.message : 'Failed to send tombstone',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsSendingTombstone(false)
+      setTombstoneMessage(null)
+    }
+  }, [activeConnectionId, selectedTopic, tombstoneMessage, produceMessage, loadMessages, filters])
+
+  const handleRepublish = useCallback((message: ParsedMessage) => {
+    if (!setMessageToRepublish) return
+    setMessageToRepublish({
+      key: message.key || undefined,
+      value: message.value || '',
+      headers: message.headers,
+      partition: message.partition
+    })
+    toast({ title: 'Message Ready', description: 'Open the message producer to republish' })
+  }, [setMessageToRepublish])
 
   return (
     <div className="flex h-full flex-col">
@@ -201,10 +262,56 @@ export function MessageViewer() {
                           </div>
                         )}
 
-                        <div className="flex gap-4 text-xs text-muted-foreground">
-                          <span>Partition: {message.partition}</span>
-                          <span>Offset: {message.offset}</span>
-                          <span>Timestamp: {formatTimestamp(message.timestamp)}</span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex gap-4 text-xs text-muted-foreground">
+                            <span>Partition: {message.partition}</span>
+                            <span>Offset: {message.offset}</span>
+                            <span>Timestamp: {formatTimestamp(message.timestamp)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleRepublish(message)
+                                    }}
+                                  >
+                                    <RotateCcw className="mr-2 h-4 w-4" />
+                                    Republish
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Create a new message with this data pre-filled</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            {message.key && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setTombstoneMessage(message)
+                                      }}
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Tombstone
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Send a null message for this key (compacted topics only)</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -219,6 +326,27 @@ export function MessageViewer() {
       <div className="flex items-center justify-between pt-2 text-xs text-muted-foreground">
         <span>{messages.length} messages loaded</span>
       </div>
+
+      <AlertDialog open={!!tombstoneMessage} onOpenChange={() => setTombstoneMessage(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send Tombstone Message</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will produce a message with a null value for the key "{tombstoneMessage?.key}".
+              <span className="block mt-2 text-warning">
+                Note: Tombstones only work on topics with log compaction enabled. The original message will remain until compaction runs.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleTombstone} disabled={isSendingTombstone}>
+              {isSendingTombstone && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Send Tombstone
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

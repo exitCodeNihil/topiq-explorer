@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTopicStore } from '@/stores/topic.store'
 import { useConnectionStore } from '@/stores/connection.store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from '@/hooks/use-toast'
-import { Loader2, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Plus, Trash2, Info } from 'lucide-react'
 
 interface MessageProducerProps {
   topic: string
@@ -23,10 +23,37 @@ export function MessageProducer({ topic, onClose }: MessageProducerProps) {
   const [partition, setPartition] = useState('')
   const [headers, setHeaders] = useState<Header[]>([])
   const [isSending, setIsSending] = useState(false)
+  const [isRepublishing, setIsRepublishing] = useState(false)
 
   const produceMessage = useTopicStore((state) => state.produceMessage)
   const loadMessages = useTopicStore((state) => state.loadMessages)
+  const messageToRepublish = useTopicStore((state) => state.messageToRepublish)
+  const setMessageToRepublish = useTopicStore((state) => state.setMessageToRepublish)
   const activeConnectionId = useConnectionStore((state) => state.activeConnectionId)
+
+  // Pre-fill form when messageToRepublish is set
+  useEffect(() => {
+    if (messageToRepublish) {
+      setKey(messageToRepublish.key || '')
+      setValue(messageToRepublish.value || '')
+      setPartition(messageToRepublish.partition !== undefined ? String(messageToRepublish.partition) : '')
+      if (messageToRepublish.headers) {
+        setHeaders(
+          Object.entries(messageToRepublish.headers).map(([k, v]) => ({ key: k, value: v }))
+        )
+      }
+      setIsRepublishing(true)
+    }
+  }, [messageToRepublish])
+
+  // Clear messageToRepublish when dialog closes
+  useEffect(() => {
+    return () => {
+      if (messageToRepublish) {
+        setMessageToRepublish(null)
+      }
+    }
+  }, [messageToRepublish, setMessageToRepublish])
 
   const addHeader = () => {
     setHeaders([...headers, { key: '', value: '' }])
@@ -89,6 +116,12 @@ export function MessageProducer({ topic, onClose }: MessageProducerProps) {
 
   return (
     <div className="space-y-4">
+      {isRepublishing && (
+        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 p-3 text-sm">
+          <Info className="h-4 w-4 text-muted-foreground" />
+          <span>Republishing a message. Modify the content below and send as a new message.</span>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="key">Key (optional)</Label>

@@ -53,6 +53,16 @@ export function Sidebar() {
 
   const handleConnect = async (connection: KafkaConnection) => {
     try {
+      // Disconnect current connection if different
+      if (activeConnectionId && activeConnectionId !== connection.id) {
+        const currentStatus = connectionStatus[activeConnectionId]
+        if (currentStatus === 'connected') {
+          await disconnectFromCluster(activeConnectionId)
+          resetTopics()
+          resetConsumers()
+        }
+      }
+
       await connectToCluster(connection.id)
       await Promise.all([loadTopics(connection.id), loadConsumerGroups(connection.id)])
       toast({ title: 'Connected', description: `Connected to ${connection.name}` })
@@ -152,9 +162,9 @@ export function Sidebar() {
                       isActive ? 'bg-accent' : 'hover:bg-accent/50'
                     }`}
                     onClick={() => {
-                      if (!isConnected && !isConnecting) {
-                        handleConnect(connection)
-                      }
+                      if (isActive && isConnected) return // Already active and connected
+                      if (isConnecting) return // Still connecting
+                      handleConnect(connection)
                     }}
                   >
                     <div

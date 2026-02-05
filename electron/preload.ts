@@ -36,7 +36,7 @@ export interface MessageOptions {
 
 export interface ProduceMessage {
   key?: string
-  value: string
+  value: string | null
   headers?: Record<string, string>
   partition?: number
 }
@@ -46,6 +46,22 @@ export interface ResetOffsetOptions {
   timestamp?: number
   offset?: string
   partitions?: number[]
+}
+
+export type UpdateChannel = 'stable' | 'beta' | 'alpha'
+
+export interface UpdateCheckResult {
+  updateAvailable: boolean
+  version: string
+  releaseNotes?: string
+  releaseDate?: string
+}
+
+export interface DownloadProgress {
+  bytesPerSecond: number
+  percent: number
+  transferred: number
+  total: number
 }
 
 const api = {
@@ -85,7 +101,51 @@ const api = {
     deleteConsumerGroup: (connectionId: string, groupId: string) =>
       ipcRenderer.invoke('kafka:deleteConsumerGroup', connectionId, groupId),
     resetOffsets: (connectionId: string, groupId: string, topic: string, options: ResetOffsetOptions) =>
-      ipcRenderer.invoke('kafka:resetOffsets', connectionId, groupId, topic, options)
+      ipcRenderer.invoke('kafka:resetOffsets', connectionId, groupId, topic, options),
+    deleteRecords: (connectionId: string, topic: string, partitionOffsets: { partition: number; offset: string }[]) =>
+      ipcRenderer.invoke('kafka:deleteRecords', connectionId, topic, partitionOffsets)
+  },
+
+  // Updater operations
+  updater: {
+    checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updater:checkForUpdates'),
+    downloadUpdate: (): Promise<{ success: boolean }> => ipcRenderer.invoke('updater:downloadUpdate'),
+    installUpdate: (): Promise<void> => ipcRenderer.invoke('updater:installUpdate'),
+    getVersion: (): Promise<string> => ipcRenderer.invoke('updater:getVersion'),
+    getChannel: (): Promise<UpdateChannel> => ipcRenderer.invoke('updater:getChannel'),
+    setChannel: (channel: UpdateChannel): Promise<UpdateChannel> => ipcRenderer.invoke('updater:setChannel', channel),
+
+    // Event listeners
+    onCheckingForUpdate: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('updater:checking-for-update', handler)
+      return () => ipcRenderer.removeListener('updater:checking-for-update', handler)
+    },
+    onUpdateAvailable: (callback: (info: UpdateCheckResult) => void) => {
+      const handler = (_: unknown, info: UpdateCheckResult) => callback(info)
+      ipcRenderer.on('updater:update-available', handler)
+      return () => ipcRenderer.removeListener('updater:update-available', handler)
+    },
+    onUpdateNotAvailable: (callback: () => void) => {
+      const handler = () => callback()
+      ipcRenderer.on('updater:update-not-available', handler)
+      return () => ipcRenderer.removeListener('updater:update-not-available', handler)
+    },
+    onDownloadProgress: (callback: (progress: DownloadProgress) => void) => {
+      const handler = (_: unknown, progress: DownloadProgress) => callback(progress)
+      ipcRenderer.on('updater:download-progress', handler)
+      return () => ipcRenderer.removeListener('updater:download-progress', handler)
+    },
+    onUpdateDownloaded: (callback: (info: UpdateCheckResult) => void) => {
+      const handler = (_: unknown, info: UpdateCheckResult) => callback(info)
+      ipcRenderer.on('updater:update-downloaded', handler)
+      return () => ipcRenderer.removeListener('updater:update-downloaded', handler)
+    },
+    onError: (callback: (error: string) => void) => {
+      const handler = (_: unknown, error: string) => callback(error)
+      ipcRenderer.on('updater:error', handler)
+      return () => ipcRenderer.removeListener('updater:error', handler)
+    }
   }
 }
 

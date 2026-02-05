@@ -7,24 +7,45 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog'
-import { MessageSquare, Settings, LayoutGrid, Send, Database } from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog'
+import { MessageSquare, Settings, LayoutGrid, Send, Database, Trash2, Loader2 } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { toast } from '@/hooks/use-toast'
 
 export function TopicDetails() {
   const [activeTab, setActiveTab] = useState('messages')
   const [isProducerOpen, setIsProducerOpen] = useState(false)
+  const [isDeleteRecordsOpen, setIsDeleteRecordsOpen] = useState(false)
+  const [deletePartition, setDeletePartition] = useState('')
+  const [deleteOffset, setDeleteOffset] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
   const selectedTopic = useTopicStore((state) => state.selectedTopic)
   const topicMetadata = useTopicStore((state) => state.topicMetadata)
   const topicConfig = useTopicStore((state) => state.topicConfig)
   const loadMessages = useTopicStore((state) => state.loadMessages)
+  const loadTopicMetadata = useTopicStore((state) => state.loadTopicMetadata)
+  const messageToRepublish = useTopicStore((state) => state.messageToRepublish)
   const activeConnectionId = useConnectionStore((state) => state.activeConnectionId)
 
   useEffect(() => {
@@ -32,6 +53,60 @@ export function TopicDetails() {
       loadMessages(activeConnectionId, selectedTopic, { limit: 100 })
     }
   }, [activeConnectionId, selectedTopic, loadMessages])
+
+  // Open producer dialog when messageToRepublish is set
+  useEffect(() => {
+    if (messageToRepublish) {
+      setIsProducerOpen(true)
+    }
+  }, [messageToRepublish])
+
+  const handleDeleteRecords = async () => {
+    if (!activeConnectionId || !selectedTopic || !topicMetadata) return
+
+    setIsDeleting(true)
+    try {
+      const partitionOffsets: { partition: number; offset: string }[] = []
+
+      if (deletePartition === '' || deletePartition === 'all') {
+        // Delete from all partitions up to the specified offset
+        for (const p of topicMetadata.partitions) {
+          const targetOffset = deleteOffset || p.high
+          partitionOffsets.push({ partition: p.partition, offset: targetOffset })
+        }
+      } else {
+        // Delete from specific partition
+        const partitionNum = parseInt(deletePartition, 10)
+        const partitionMeta = topicMetadata.partitions.find((p) => p.partition === partitionNum)
+        const targetOffset = deleteOffset || partitionMeta?.high || '0'
+        partitionOffsets.push({ partition: partitionNum, offset: targetOffset })
+      }
+
+      await window.api.kafka.deleteRecords(activeConnectionId, selectedTopic, partitionOffsets)
+
+      toast({
+        title: 'Records Deleted',
+        description: `Records before offset ${deleteOffset || 'high watermark'} have been deleted`
+      })
+
+      // Refresh metadata and messages
+      await loadTopicMetadata(activeConnectionId, selectedTopic)
+      await loadMessages(activeConnectionId, selectedTopic, { limit: 100 })
+
+      setIsDeleteRecordsOpen(false)
+      setDeletePartition('')
+      setDeleteOffset('')
+    } catch (error) {
+      toast({
+        title: 'Delete Failed',
+        description: error instanceof Error ? error.message : 'Failed to delete records',
+        variant: 'destructive'
+      })
+    } finally {
+      setIsDeleting(false)
+      setConfirmDeleteOpen(false)
+    }
+  }
 
   if (!selectedTopic || !topicMetadata) {
     return (
@@ -73,20 +148,112 @@ export function TopicDetails() {
             <Badge variant="secondary">{totalMessages.toLocaleString()} messages</Badge>
           </div>
         </div>
-        <Dialog open={isProducerOpen} onOpenChange={setIsProducerOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Send className="mr-2 h-4 w-4" />
-              Produce Message
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
-            <DialogHeader>
-              <DialogTitle>Produce Message to {selectedTopic}</DialogTitle>
-            </DialogHeader>
-            <MessageProducer topic={selectedTopic} onClose={() => setIsProducerOpen(false)} />
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <Dialog open={isDeleteRecordsOpen} onOpenChange={setIsDeleteRecordsOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline">
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Records
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[450px]">
+              <DialogHeader>
+                <DialogTitle>Delete Records from {selectedTopic}</DialogTitle>
+                <DialogDescription>
+                  Delete all records before a specific offset. This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="deletePartition">Partition</Label>
+                  <Input
+                    id="deletePartition"
+                    placeholder="All partitions"
+                    value={deletePartition}
+                    onChange={(e) => setDeletePartition(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave empty to delete from all partitions
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="deleteOffset">Delete records before offset</Label>
+                  <Input
+                    id="deleteOffset"
+                    placeholder="High watermark (delete all)"
+                    value={deleteOffset}
+                    onChange={(e) => setDeleteOffset(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Leave empty to delete all records up to the high watermark
+                  </p>
+                </div>
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button variant="outline" onClick={() => setIsDeleteRecordsOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setConfirmDeleteOpen(true)}
+                    disabled={isDeleting}
+                  >
+                    Delete Records
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isProducerOpen} onOpenChange={setIsProducerOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Send className="mr-2 h-4 w-4" />
+                Produce Message
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Produce Message to {selectedTopic}</DialogTitle>
+              </DialogHeader>
+              <MessageProducer topic={selectedTopic} onClose={() => setIsProducerOpen(false)} />
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Delete Records</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete records from {selectedTopic}? This action cannot be undone.
+                {deletePartition && deletePartition !== 'all' && (
+                  <span className="block mt-2">
+                    Partition: {deletePartition}
+                  </span>
+                )}
+                {!deletePartition && (
+                  <span className="block mt-2">
+                    All partitions will be affected.
+                  </span>
+                )}
+                <span className="block mt-1">
+                  Records before offset: {deleteOffset || 'high watermark (all records)'}
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteRecords}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={isDeleting}
+              >
+                {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Delete Records
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       {/* Tabs */}
