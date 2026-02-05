@@ -50,6 +50,21 @@ interface KafkaInstance {
 
 export class KafkaService {
   private instances: Map<string, KafkaInstance> = new Map()
+  private tempConsumerGroups: Map<string, Set<string>> = new Map()
+
+  private trackTempGroup(connectionId: string, groupId: string): void {
+    if (!this.tempConsumerGroups.has(connectionId)) {
+      this.tempConsumerGroups.set(connectionId, new Set())
+    }
+    this.tempConsumerGroups.get(connectionId)!.add(groupId)
+  }
+
+  private untrackTempGroup(connectionId: string, groupId: string): void {
+    const groups = this.tempConsumerGroups.get(connectionId)
+    if (groups) {
+      groups.delete(groupId)
+    }
+  }
 
   private createKafkaClient(connection: KafkaConnection): Kafka {
     const sasl: SASLOptions | undefined = connection.sasl
@@ -113,10 +128,40 @@ export class KafkaService {
     for (const consumer of instance.consumers.values()) {
       await consumer.disconnect()
     }
+
+    // Clean up any tracked temporary consumer groups before disconnecting admin
+    await this.cleanupTempGroups(connectionId)
+
     await instance.producer.disconnect()
     await instance.admin.disconnect()
 
     this.instances.delete(connectionId)
+  }
+
+  async cleanupTempGroups(connectionId: string): Promise<void> {
+    const groups = this.tempConsumerGroups.get(connectionId)
+    if (!groups || groups.size === 0) return
+
+    const instance = this.instances.get(connectionId)
+    if (!instance) return
+
+    try {
+      await instance.admin.deleteGroups([...groups])
+    } catch {
+      // Ignore errors - groups may already be deleted
+    }
+    groups.clear()
+  }
+
+  async deleteOrphanedGroups(connectionId: string, groupIds: string[]): Promise<void> {
+    if (groupIds.length === 0) return
+
+    const { admin } = this.getInstance(connectionId)
+    try {
+      await admin.deleteGroups(groupIds)
+    } catch {
+      // Ignore errors for non-existent groups
+    }
   }
 
   async disconnectAll(): Promise<void> {
@@ -198,6 +243,19 @@ export class KafkaService {
     const groupId = `kafka-explorer-consumer-${randomUUID()}`
     const consumer = kafka.consumer({ groupId })
 
+    // Track this temporary group for cleanup on shutdown
+    this.trackTempGroup(connectionId, groupId)
+
+    const cleanup = async () => {
+      await consumer.disconnect()
+      try {
+        await admin.deleteGroups([groupId])
+      } catch {
+        // Group may already be deleted or not exist, ignore
+      }
+      this.untrackTempGroup(connectionId, groupId)
+    }
+
     try {
       await consumer.connect()
 
@@ -228,7 +286,7 @@ export class KafkaService {
         let lastPartition: number | null = null
 
         const timeout = setTimeout(() => {
-          consumer.disconnect().then(() =>
+          cleanup().then(() =>
             resolve({
               messages,
               hasMore: false,
@@ -242,7 +300,7 @@ export class KafkaService {
             eachMessage: async ({ partition: msgPartition, message }) => {
               if (messageCount >= maxLimit) {
                 clearTimeout(timeout)
-                await consumer.disconnect()
+                await cleanup()
                 resolve({
                   messages,
                   hasMore: true,
@@ -274,7 +332,7 @@ export class KafkaService {
 
               if (messageCount >= maxLimit) {
                 clearTimeout(timeout)
-                await consumer.disconnect()
+                await cleanup()
                 resolve({
                   messages,
                   hasMore: true,
@@ -286,11 +344,11 @@ export class KafkaService {
           })
           .catch((error) => {
             clearTimeout(timeout)
-            consumer.disconnect().then(() => reject(error))
+            cleanup().then(() => reject(error))
           })
       })
     } catch (error) {
-      await consumer.disconnect()
+      await cleanup()
       throw error
     }
   }

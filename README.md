@@ -35,6 +35,12 @@ Download the latest release for your platform from the [Releases](https://github
 - **DMG**: Download `Topiq-x.x.x.dmg` and drag to Applications
 - **ZIP**: Download `Topiq-x.x.x-mac.zip` for portable use
 
+> **Note**: The app is not code-signed. If you see "Topiq is damaged and can't be opened", run:
+> ```bash
+> xattr -cr /Applications/Topiq.app
+> ```
+> Or right-click the app → Open → Open (bypasses Gatekeeper).
+
 #### Windows
 - **Installer**: Download `Topiq-Setup-x.x.x.exe` for standard installation
 - **Portable**: Download `Topiq-x.x.x.exe` for portable use

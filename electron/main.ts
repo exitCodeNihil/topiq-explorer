@@ -83,7 +83,20 @@ ipcMain.handle('kafka:connect', async (_, connectionId: string) => {
   if (!connection) {
     throw new Error('Connection not found')
   }
-  return kafkaService.connect(connection)
+  await kafkaService.connect(connection)
+
+  // Clean up any orphaned consumer groups from previous sessions (crash recovery)
+  try {
+    const groups = await kafkaService.getConsumerGroups(connectionId)
+    const orphaned = groups
+      .filter((g) => g.groupId.startsWith('kafka-explorer-consumer-'))
+      .map((g) => g.groupId)
+    if (orphaned.length > 0) {
+      await kafkaService.deleteOrphanedGroups(connectionId, orphaned)
+    }
+  } catch {
+    // Ignore cleanup errors - don't fail the connection
+  }
 })
 
 ipcMain.handle('kafka:disconnect', async (_, connectionId: string) => {
