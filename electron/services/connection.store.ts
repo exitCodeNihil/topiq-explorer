@@ -2,7 +2,6 @@ import Store from 'electron-store'
 import { randomUUID, createHash } from 'crypto'
 import { machineIdSync } from 'node-machine-id'
 import os from 'os'
-import fs from 'fs'
 import type { KafkaConnection } from '../../shared/types'
 
 // Derive encryption key from machine-specific data
@@ -53,29 +52,10 @@ export class ConnectionStore {
   constructor() {
     const encryptionKey = deriveEncryptionKey()
     const storeName = 'kafka-explorer-connections'
-    const storePath = getStorePath(storeName)
-
-    // Check if store file exists and try to pre-validate it
-    // If encrypted with wrong key, delete it before Store constructor tries to parse it
-    if (fs.existsSync(storePath)) {
-      try {
-        const content = fs.readFileSync(storePath, 'utf-8')
-        // Try to parse as JSON - encrypted content will fail
-        JSON.parse(content)
-        // If we get here, it's valid JSON (unencrypted or already migrated)
-      } catch {
-        // File exists but can't be parsed - likely encrypted with old key
-        console.warn('Connection store encrypted with different key, resetting...')
-        try {
-          fs.unlinkSync(storePath)
-        } catch {
-          // Ignore deletion errors
-        }
-      }
-    }
 
     this.store = new Store<StoreSchema>({
       name: storeName,
+      cwd: getStorePath(storeName).replace(`/${storeName}.json`, ''),
       defaults: {
         connections: {}
       },
