@@ -227,6 +227,41 @@ export class KafkaService {
     return instance
   }
 
+  async getClusterInfo(connectionId: string) {
+    const { admin } = this.getInstance(connectionId)
+    const cluster = await admin.describeCluster()
+
+    // Try to get Kafka version from broker config
+    let kafkaVersion: string | null = null
+    try {
+      if (cluster.brokers.length > 0) {
+        const brokerConfigs = await admin.describeConfigs({
+          includeSynonyms: false,
+          resources: [{ type: 4, name: String(cluster.brokers[0].nodeId) }] // 4 = BROKER
+        })
+        const versionEntry = brokerConfigs.resources[0]?.configEntries?.find(
+          (e: { configName: string }) => e.configName === 'inter.broker.protocol.version'
+        )
+        if (versionEntry) {
+          kafkaVersion = (versionEntry as { configValue: string }).configValue
+        }
+      }
+    } catch {
+      // Some Kafka versions/configs may not support this, ignore
+    }
+
+    return {
+      clusterId: cluster.clusterId,
+      controller: cluster.controller,
+      brokers: cluster.brokers.map((b: { nodeId: number; host: string; port: number }) => ({
+        nodeId: b.nodeId,
+        host: b.host,
+        port: b.port
+      })),
+      kafkaVersion
+    }
+  }
+
   async getTopics(connectionId: string): Promise<string[]> {
     const { admin } = this.getInstance(connectionId)
     return admin.listTopics()

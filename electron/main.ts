@@ -251,6 +251,14 @@ ipcMain.handle('kafka:disconnect', async (_, connectionId: string) => {
   }
 })
 
+ipcMain.handle('kafka:getClusterInfo', async (_, connectionId: string) => {
+  try {
+    return ipcSuccess(await kafkaService.getClusterInfo(connectionId))
+  } catch (error) {
+    return ipcError(error)
+  }
+})
+
 ipcMain.handle('kafka:getTopics', async (_, connectionId: string) => {
   try {
     return ipcSuccess(await kafkaService.getTopics(connectionId))

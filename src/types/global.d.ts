@@ -97,6 +97,7 @@ interface WindowApi {
   kafka: {
     connect: (connectionId: string) => Promise<void>
     disconnect: (connectionId: string) => Promise<void>
+    getClusterInfo: (connectionId: string) => Promise<any>
     getTopics: (connectionId: string) => Promise<string[]>
     getTopicMetadata: (connectionId: string, topic: string) => Promise<any>
     getTopicConfig: (connectionId: string, topic: string) => Promise<any>

@@ -4,30 +4,31 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --background: 220 14% 96%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
+    --popover-foreground: 222 47% 11%;
     --primary: 24 100% 50%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 14% 92%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 220 14% 92%;
+    --accent-foreground: 222 47% 11%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
     --success: 142 71% 45%;
     --success-foreground: 142 76% 36%;
     --warning: 38 92% 50%;
     --warning-foreground: 38 92% 40%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 24 100% 50%;
+    --border: 220 13% 87%;
+    --input: 220 13% 87%;
+    --ring: 142 100% 50%;
     --radius: 0.5rem;
+    --sidebar: 220 14% 97%;
     --json-key: 199 89% 48%;
     --json-string: 142 71% 45%;
     --json-number: 38 92% 50%;
@@ -36,29 +37,30 @@
   }
 
   .dark {
-    --background: 240 10% 4%;
-    --foreground: 0 0% 95%;
-    --card: 240 10% 6%;
-    --card-foreground: 0 0% 95%;
-    --popover: 240 10% 6%;
-    --popover-foreground: 0 0% 95%;
-    --primary: 24 100% 50%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 5% 15%;
-    --secondary-foreground: 0 0% 95%;
-    --muted: 240 5% 15%;
-    --muted-foreground: 240 5% 55%;
-    --accent: 240 5% 15%;
-    --accent-foreground: 0 0% 95%;
+    --background: 220 18% 5%;
+    --foreground: 240 5% 90%;
+    --card: 220 14% 11%;
+    --card-foreground: 240 5% 90%;
+    --popover: 220 16% 10%;
+    --popover-foreground: 240 5% 90%;
+    --primary: 133 100% 50%;
+    --primary-foreground: 220 18% 5%;
+    --secondary: 220 14% 11%;
+    --secondary-foreground: 240 5% 90%;
+    --muted: 220 14% 11%;
+    --muted-foreground: 240 4% 66%;
+    --accent: 220 14% 11%;
+    --accent-foreground: 240 5% 90%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 95%;
+    --destructive-foreground: 240 5% 90%;
     --success: 142 71% 45%;
     --success-foreground: 142 76% 73%;
     --warning: 38 92% 50%;
     --warning-foreground: 48 96% 70%;
-    --border: 240 5% 17%;
-    --input: 240 5% 17%;
-    --ring: 24 100% 50%;
+    --border: 220 10% 18%;
+    --input: 220 10% 18%;
+    --ring: 133 100% 50%;
+    --sidebar: 220 16% 10%;
     --json-key: 199 89% 72%;
     --json-string: 142 76% 73%;
     --json-number: 48 96% 70%;
@@ -81,8 +83,8 @@
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -90,12 +92,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.3);
-  border-radius: 4px;
+  background: #2D3139;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.5);
+  background: #3D4149;
 }
 
 /* Electron window drag area */
@@ -109,7 +111,7 @@
 
 /* Code/JSON viewer styling */
 .json-viewer {
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', monospace;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Monaco', monospace;
   font-size: 13px;
   line-height: 1.5;
 }

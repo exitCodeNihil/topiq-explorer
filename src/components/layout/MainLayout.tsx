@@ -1,17 +1,37 @@
 import { useState, useEffect } from 'react'
-import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels'
 import { Sidebar } from './Sidebar'
 import { TopicList } from '../topics/TopicList'
 import { TopicDetails } from '../topics/TopicDetails'
 import { ConsumerGroupList } from '../consumers/ConsumerGroupList'
 import { ConsumerGroupDetails } from '../consumers/ConsumerGroupDetails'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { ClusterDetails } from '../cluster/ClusterDetails'
 import { useConnectionStore } from '@/stores/connection.store'
 import { useTopicStore } from '@/stores/topic.store'
 import { useConsumerStore } from '@/stores/consumer.store'
-import { Database, Users, Zap } from 'lucide-react'
+import { Terminal } from 'lucide-react'
 import { UpdateNotification } from '../updates/UpdateNotification'
 import { UpdateSettings } from '../updates/UpdateSettings'
+
+const tabs = [
+  { id: 'topics', label: 'Topics' },
+  { id: 'consumers', label: 'Groups' },
+  { id: 'cluster', label: 'Cluster' },
+] as const
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="flex h-full items-center justify-center">
+      <div className="text-center">
+        <div className="relative mx-auto h-16 w-16 mb-6">
+          <div className="absolute inset-0 rounded-full border border-dashed border-border-mute animate-spin-slow" />
+          <div className="absolute inset-3 rounded-full border border-border-mute/60" />
+          <div className="absolute inset-[26px] rounded-full bg-accent-active/80" />
+        </div>
+        <p className="text-sm text-text-secondary">{message}</p>
+      </div>
+    </div>
+  )
+}
 
 export function MainLayout() {
   const [activeTab, setActiveTab] = useState('topics')
@@ -29,131 +49,130 @@ export function MainLayout() {
     window.api.updater.getVersion().then(setAppVersion)
   }, [])
 
+  const tabLabel = activeTab === 'topics' ? 'Topics' : activeTab === 'consumers' ? 'Groups' : 'Cluster'
+  const selectedLabel = activeTab === 'topics'
+    ? selectedTopic
+    : activeTab === 'consumers'
+    ? selectedGroupId
+    : null
+
   return (
     <div className="flex h-screen flex-col">
       {/* Title Bar */}
-      <div className="drag-region flex h-12 items-center justify-between border-b border-border bg-card px-4">
+      <div className="drag-region flex h-12 items-center justify-between border-b border-border-mute bg-bg-sidebar px-4 shrink-0">
         <div className="flex items-center gap-2 pl-16">
-          <Zap className="h-5 w-5 text-primary" />
-          <span className="font-semibold">Kafka Explorer</span>
+          <Terminal className="h-4 w-4 text-accent-active" />
+          <span className="text-sm font-semibold text-text-primary">Kafka Explorer</span>
         </div>
-        <div className="no-drag flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="no-drag flex items-center gap-2 text-xs text-text-secondary">
           {activeConnection && isConnected && (
             <span className="flex items-center gap-2">
-              <span
-                className="h-2 w-2 rounded-full bg-green-500"
-                style={{ backgroundColor: activeConnection.color }}
-              />
-              {activeConnection.name}
+              <span className="h-2 w-2 rounded-full bg-accent-active" />
+              <span className="font-mono text-text-secondary">{activeConnection.name}</span>
             </span>
           )}
         </div>
       </div>
 
       {/* Main Content */}
-      <PanelGroup direction="horizontal" className="flex-1">
-        {/* Sidebar */}
-        <Panel defaultSize={15} minSize={10} maxSize={25}>
-          <Sidebar />
-        </Panel>
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar Icon Bar */}
+        <Sidebar />
 
-        <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors" />
-
-        {/* Content Area */}
-        <Panel defaultSize={85}>
-          {!isConnected ? (
-            <div className="flex h-full items-center justify-center">
-              <div className="text-center">
-                <Database className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                <h2 className="mt-4 text-lg font-medium">No Connection Selected</h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Select a connection from the sidebar to get started
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex h-full flex-col">
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-full flex-col">
-                <div className="border-b border-border px-4">
-                  <TabsList className="h-12 bg-transparent">
-                    <TabsTrigger
-                      value="topics"
-                      className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+        {/* Content Column (right of sidebar) */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {isConnected ? (
+            <div className="flex flex-1 overflow-hidden">
+              {/* Left Panel */}
+              <div className="w-80 bg-bg-sidebar border-r border-border-mute flex flex-col shrink-0">
+                {/* Tab buttons */}
+                <div className="flex items-center border-b border-border-mute">
+                  {tabs.map(({ id, label }) => (
+                    <button
+                      key={id}
+                      onClick={() => setActiveTab(id)}
+                      className={`flex-1 py-3 text-xs font-medium transition-colors border-b-[2px] ${
+                        activeTab === id
+                          ? 'text-text-primary border-accent-active bg-bg-main'
+                          : 'text-text-secondary border-transparent hover:text-text-primary'
+                      }`}
                     >
-                      <Database className="mr-2 h-4 w-4" />
-                      Topics
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="consumers"
-                      className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
-                    >
-                      <Users className="mr-2 h-4 w-4" />
-                      Consumer Groups
-                    </TabsTrigger>
-                  </TabsList>
+                      {label}
+                    </button>
+                  ))}
                 </div>
 
-                <TabsContent value="topics" className="flex-1 mt-0 data-[state=inactive]:hidden">
-                  <PanelGroup direction="horizontal">
-                    <Panel defaultSize={30} minSize={20} maxSize={50}>
-                      <TopicList />
-                    </Panel>
-                    <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors" />
-                    <Panel defaultSize={70}>
-                      {selectedTopic ? (
-                        <TopicDetails />
-                      ) : (
-                        <div className="flex h-full items-center justify-center">
-                          <div className="text-center">
-                            <Database className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                            <p className="mt-4 text-sm text-muted-foreground">Select a topic to view details</p>
-                          </div>
-                        </div>
-                      )}
-                    </Panel>
-                  </PanelGroup>
-                </TabsContent>
+                {/* List content */}
+                <div className="flex-1 overflow-hidden">
+                  {activeTab === 'topics' && <TopicList />}
+                  {activeTab === 'consumers' && <ConsumerGroupList />}
+                  {activeTab === 'cluster' && (
+                    <EmptyState message="Cluster overview in main panel" />
+                  )}
+                </div>
+              </div>
 
-                <TabsContent value="consumers" className="flex-1 mt-0 data-[state=inactive]:hidden">
-                  <PanelGroup direction="horizontal">
-                    <Panel defaultSize={30} minSize={20} maxSize={50}>
-                      <ConsumerGroupList />
-                    </Panel>
-                    <PanelResizeHandle className="w-1 bg-border hover:bg-primary/50 transition-colors" />
-                    <Panel defaultSize={70}>
-                      {selectedGroupId ? (
-                        <ConsumerGroupDetails />
-                      ) : (
-                        <div className="flex h-full items-center justify-center">
-                          <div className="text-center">
-                            <Users className="mx-auto h-12 w-12 text-muted-foreground/50" />
-                            <p className="mt-4 text-sm text-muted-foreground">
-                              Select a consumer group to view details
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </Panel>
-                  </PanelGroup>
-                </TabsContent>
-              </Tabs>
+              {/* Main Content Area */}
+              <main className="flex-1 bg-bg-main flex flex-col overflow-hidden">
+                {/* Breadcrumb bar */}
+                <div className="h-12 border-b border-border-mute flex items-center px-8 shrink-0">
+                  <div className="flex items-center text-sm text-text-secondary font-mono">
+                    <span className="hover:text-text-primary cursor-pointer transition-colors">{tabLabel}</span>
+                    {selectedLabel && (
+                      <>
+                        <span className="mx-2 text-border-mute">/</span>
+                        <span className="font-medium text-text-primary truncate max-w-[300px]">{selectedLabel}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-hidden">
+                  {activeTab === 'topics' ? (
+                    selectedTopic ? (
+                      <TopicDetails />
+                    ) : (
+                      <EmptyState message="Select a topic to view details" />
+                    )
+                  ) : activeTab === 'consumers' ? (
+                    selectedGroupId ? (
+                      <ConsumerGroupDetails />
+                    ) : (
+                      <EmptyState message="Select a consumer group to view details" />
+                    )
+                  ) : (
+                    <ClusterDetails />
+                  )}
+                </div>
+
+                {/* Status Bar */}
+                <div className="flex h-8 items-center justify-between border-t border-border-mute bg-bg-sidebar px-4 text-xs text-text-secondary font-mono shrink-0">
+                  <div className="flex items-center gap-3">
+                    {activeConnection && isConnected && (
+                      <>
+                        <span className="flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 rounded-full bg-accent-active" />
+                          <span className="text-accent-active">Connected</span>
+                        </span>
+                        <span className="text-border-mute">|</span>
+                        <span>{activeConnection.brokers.join(', ')}</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <UpdateSettings compact />
+                    <span>v{appVersion || '...'}</span>
+                  </div>
+                </div>
+              </main>
+            </div>
+          ) : (
+            /* Not connected state */
+            <div className="flex-1 flex items-center justify-center bg-bg-main">
+              <EmptyState message="Select a connection from the sidebar to get started" />
             </div>
           )}
-        </Panel>
-      </PanelGroup>
-
-      {/* Status Bar */}
-      <div className="flex h-6 items-center justify-between border-t border-border bg-card px-4 text-xs text-muted-foreground">
-        <div className="flex items-center gap-4">
-          {activeConnection && isConnected && (
-            <>
-              <span>Connected to {activeConnection.brokers.join(', ')}</span>
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <UpdateSettings compact />
-          <span>v{appVersion || '...'}</span>
         </div>
       </div>
 

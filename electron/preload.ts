@@ -40,6 +40,9 @@ const api = {
     connect: (connectionId: string): Promise<void> => ipcRenderer.invoke('kafka:connect', connectionId),
     disconnect: (connectionId: string): Promise<void> => ipcRenderer.invoke('kafka:disconnect', connectionId),
 
+    // Cluster
+    getClusterInfo: (connectionId: string) => ipcRenderer.invoke('kafka:getClusterInfo', connectionId),
+
     // Topics
     getTopics: (connectionId: string): Promise<string[]> => ipcRenderer.invoke('kafka:getTopics', connectionId),
     getTopicMetadata: (connectionId: string, topic: string) => ipcRenderer.invoke('kafka:getTopicMetadata', connectionId, topic),

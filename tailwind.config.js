@@ -17,6 +17,10 @@ module.exports = {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['JetBrains Mono', 'SF Mono', 'Monaco', 'monospace'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -59,16 +63,24 @@ module.exports = {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
-        kafka: {
-          DEFAULT: "#FF6B35",
-          dark: "#E55A2B",
-          light: "#FF8255"
-        }
+        sidebar: "hsl(var(--sidebar))",
+        'bg-main': '#0D0F12',
+        'bg-sidebar': '#16191E',
+        'bg-panel': '#1A1D23',
+        'border-mute': '#2D3139',
+        'text-primary': '#E4E4E7',
+        'text-secondary': '#A1A1AA',
+        'accent-active': '#00FF41',
+        'accent-violet': '#9D4EDD',
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      boxShadow: {
+        'subtle': '0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2)',
+        'glow-green': '0 0 12px rgba(0, 255, 65, 0.3), 0 0 4px rgba(0, 255, 65, 0.2)',
       },
       keyframes: {
         "accordion-down": {
@@ -91,6 +103,10 @@ module.exports = {
           from: { transform: "translateX(100%)" },
           to: { transform: "translateX(0)" },
         },
+        "spin-slow": {
+          from: { transform: "rotate(0deg)" },
+          to: { transform: "rotate(360deg)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -98,6 +114,7 @@ module.exports = {
         "fade-in": "fade-in 0.2s ease-out",
         "slide-in-from-left": "slide-in-from-left 0.2s ease-out",
         "slide-in-from-right": "slide-in-from-right 0.2s ease-out",
+        "spin-slow": "spin-slow 8s linear infinite",
       },
     },
   },

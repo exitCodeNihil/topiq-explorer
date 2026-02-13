@@ -116,6 +116,19 @@ export interface ResetOffsetOptions {
   partitions?: number[]
 }
 
+export interface BrokerInfo {
+  nodeId: number
+  host: string
+  port: number
+}
+
+export interface ClusterInfo {
+  clusterId: string
+  controller: number
+  brokers: BrokerInfo[]
+  kafkaVersion: string | null
+}
+
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 
 export type UpdateChannel = 'stable' | 'beta' | 'alpha'

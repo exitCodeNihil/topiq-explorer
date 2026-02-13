@@ -2,13 +2,15 @@ import { useEffect } from 'react'
 import { MainLayout } from './components/layout/MainLayout'
 import { Toaster } from './components/ui/toaster'
 import { useConnectionStore } from './stores/connection.store'
+import { useThemeStore } from './stores/theme.store'
 
 export default function App() {
   const loadConnections = useConnectionStore((state) => state.loadConnections)
+  const initializeTheme = useThemeStore((state) => state.initializeTheme)
 
   useEffect(() => {
-    // Add dark class to document root for Radix UI portals
-    document.documentElement.classList.add('dark')
+    initializeTheme()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initializeTheme is a stable store action
   }, [])
 
   useEffect(() => {
@@ -17,7 +19,7 @@ export default function App() {
   }, [])
 
   return (
-    <div className="dark h-screen w-screen overflow-hidden bg-background text-foreground">
+    <div className="h-screen w-screen overflow-hidden bg-background text-foreground font-sans antialiased">
       <MainLayout />
       <Toaster />
     </div>

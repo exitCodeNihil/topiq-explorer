@@ -1,10 +1,12 @@
 import { create } from 'zustand'
-import type { KafkaConnection, ConnectionStatus } from '../types/kafka.types'
+import type { KafkaConnection, ConnectionStatus, ClusterInfo } from '../types/kafka.types'
 
 interface ConnectionState {
   connections: KafkaConnection[]
   activeConnectionId: string | null
   connectionStatus: Record<string, ConnectionStatus>
+  clusterInfo: ClusterInfo | null
+  isLoadingClusterInfo: boolean
   isLoading: boolean
   error: string | null
 
@@ -18,12 +20,15 @@ interface ConnectionState {
   connectToCluster: (id: string) => Promise<void>
   disconnectFromCluster: (id: string) => Promise<void>
   getActiveConnection: () => KafkaConnection | null
+  loadClusterInfo: (connectionId: string) => Promise<void>
 }
 
 export const useConnectionStore = create<ConnectionState>((set, get) => ({
   connections: [],
   activeConnectionId: null,
   connectionStatus: {},
+  clusterInfo: null,
+  isLoadingClusterInfo: false,
   isLoading: false,
   error: null,
 
@@ -169,7 +174,8 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       }
       set((state) => ({
         connectionStatus: { ...state.connectionStatus, [id]: 'disconnected' },
-        activeConnectionId: state.activeConnectionId === id ? null : state.activeConnectionId
+        activeConnectionId: state.activeConnectionId === id ? null : state.activeConnectionId,
+        clusterInfo: state.activeConnectionId === id ? null : state.clusterInfo
       }))
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to disconnect' })
@@ -180,5 +186,23 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   getActiveConnection: () => {
     const { connections, activeConnectionId } = get()
     return connections.find((c) => c.id === activeConnectionId) || null
+  },
+
+  loadClusterInfo: async (connectionId) => {
+    set({ isLoadingClusterInfo: true })
+    try {
+      const result = await window.api.kafka.getClusterInfo(connectionId) as unknown
+      if (result && typeof result === 'object' && 'success' in result) {
+        const typedResult = result as { success: boolean; data?: ClusterInfo; error?: string }
+        if (!typedResult.success) {
+          throw new Error(typedResult.error || 'Failed to load cluster info')
+        }
+        set({ clusterInfo: typedResult.data ?? null, isLoadingClusterInfo: false })
+      } else {
+        set({ clusterInfo: result as ClusterInfo, isLoadingClusterInfo: false })
+      }
+    } catch (error) {
+      set({ isLoadingClusterInfo: false, error: error instanceof Error ? error.message : 'Failed to load cluster info' })
+    }
   }
 }))

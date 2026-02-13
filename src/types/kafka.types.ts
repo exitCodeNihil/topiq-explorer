@@ -14,6 +14,8 @@ export type {
   ConsumerMember,
   PartitionOffset,
   ResetOffsetOptions,
+  BrokerInfo,
+  ClusterInfo,
   ConnectionStatus,
   UpdateChannel,
   UpdateCheckResult,
