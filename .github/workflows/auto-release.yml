@@ -12,7 +12,7 @@ concurrency:
 jobs:
   auto-release:
     # Skip version-bump commits to prevent infinite loops
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
     runs-on: ubuntu-latest
 
     steps:
@@ -46,11 +46,12 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
           BUMP="minor"
-          PR_JSON=$(gh api "/repos/${{ github.repository }}/commits/${{ github.sha }}/pulls" 2>/dev/null || echo "[]")
-          PR_COUNT=$(echo "$PR_JSON" | jq 'length')
+          COMMIT_MSG="${{ github.event.head_commit.message }}"
+          PR_NUMBER=$(echo "$COMMIT_MSG" | grep -oP '#\K[0-9]+' | head -1)
 
-          if [ "$PR_COUNT" -gt 0 ]; then
-            LABELS=$(echo "$PR_JSON" | jq -r '.[0].labels[].name')
+          if [ -n "$PR_NUMBER" ]; then
+            echo "Found PR #$PR_NUMBER from merge commit message"
+            LABELS=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json labels --jq '.labels[].name')
             echo "PR labels: $LABELS"
 
             if echo "$LABELS" | grep -q "^release:major$"; then
@@ -59,7 +60,7 @@ jobs:
               BUMP="patch"
             fi
           else
-            echo "No PR found for this commit, defaulting to minor bump"
+            echo "No PR number found in commit message, defaulting to minor bump"
           fi
 
           echo "bump=$BUMP" >> $GITHUB_OUTPUT
@@ -123,7 +124,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add package.json
-          git commit -m "chore(release): v${{ steps.bump.outputs.new_version }} [skip ci]"
+          git commit -m "chore(release): v${{ steps.bump.outputs.new_version }}"
 
           git tag "v${{ steps.bump.outputs.new_version }}"
 

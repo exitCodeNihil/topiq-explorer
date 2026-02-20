@@ -17,12 +17,12 @@ echo "Generating SSL certificates..."
 # Generate CA key and certificate
 echo "Creating Certificate Authority..."
 openssl req -new -x509 -keyout ca-key -out ca-cert -days 365 -nodes \
-    -subj "/CN=topiq-explorer-ca/OU=Testing/O=KafkaExplorer/L=Local/ST=Dev/C=US"
+    -subj "/CN=topiq-explorer-ca/OU=Testing/O=TopiqExplorer/L=Local/ST=Dev/C=US"
 
 # Create server keystore
 echo "Creating server keystore..."
 keytool -genkey -keystore kafka.server.keystore.jks -validity 365 -storepass "$PASSWORD" -keypass "$PASSWORD" \
-    -dname "CN=localhost, OU=Testing, O=KafkaExplorer, L=Local, ST=Dev, C=US" \
+    -dname "CN=localhost, OU=Testing, O=TopiqExplorer, L=Local, ST=Dev, C=US" \
     -alias localhost -storetype PKCS12 -keyalg RSA
 
 # Create certificate signing request
@@ -48,7 +48,7 @@ keytool -keystore kafka.server.truststore.jks -alias CARoot -import -file ca-cer
 # Create client keystore (for client authentication)
 echo "Creating client keystore..."
 keytool -genkey -keystore kafka.client.keystore.jks -validity 365 -storepass "$PASSWORD" -keypass "$PASSWORD" \
-    -dname "CN=client, OU=Testing, O=KafkaExplorer, L=Local, ST=Dev, C=US" \
+    -dname "CN=client, OU=Testing, O=TopiqExplorer, L=Local, ST=Dev, C=US" \
     -alias client -storetype PKCS12 -keyalg RSA
 
 # Create client certificate signing request

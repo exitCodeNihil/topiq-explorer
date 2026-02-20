@@ -5,7 +5,7 @@ This guide covers how to test Topiq Explorer with different authentication metho
 ## Prerequisites
 
 - Docker and Docker Compose installed
-- Node.js 18+ for running the application
+- Node.js 20+ for running the application
 - OpenSSL and Java keytool (for SSL certificate generation)
 
 ## Quick Start
@@ -94,7 +94,7 @@ Certificate files are generated in `docker/certs/`:
 - `client.pem` - Client certificate (PEM format)
 - `client-key.pem` - Client private key (PEM format)
 
-Keystore password: `topiq`
+Keystore password: `topiq-explorer`
 
 ## Testing Procedures
 

@@ -1,10 +1,10 @@
 {
   "name": "topiq-explorer",
-  "version": "1.1.0",
+  "version": "0.0.8-alpha",
   "description": "A cross-platform desktop application for exploring and managing Apache Kafka clusters",
   "main": "dist-electron/main.js",
-  "author": "<babunihil@gmail.com>",
-  "license": "MIT",
+  "author": "Nihil Babu <babunihil@gmail.com>",
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
@@ -87,7 +87,7 @@
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
-      "icon": "build/icon.icns",
+      "icon": "build/icon.png",
       "target": [
         {
           "target": "dmg",
@@ -106,7 +106,7 @@
       ]
     },
     "win": {
-      "icon": "build/icon.ico",
+      "icon": "build/icon.png",
       "target": [
         "nsis",
         "portable"

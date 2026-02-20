@@ -68,8 +68,8 @@ If the automated workflow fails or you need manual control:
 # 1. Update version in package.json
 npm version <major|minor|patch> --no-git-tag-version
 
-# 2. Commit with [skip ci] to prevent the auto-release workflow from running
-git commit -am "chore(release): vX.Y.Z [skip ci]"
+# 2. Commit (the chore(release): prefix prevents the auto-release workflow from re-triggering)
+git commit -am "chore(release): vX.Y.Z"
 
 # 3. Tag and push
 git tag vX.Y.Z
