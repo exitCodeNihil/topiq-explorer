@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, memo } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react'
 import { Virtuoso } from 'react-virtuoso'
 import { useTopicStore } from '@/stores/topic.store'
 import { useConnectionStore } from '@/stores/connection.store'
@@ -219,6 +219,10 @@ export function MessageViewer() {
   const searchMoreMessages = useTopicStore((state) => state.searchMoreMessages)
   const clearSearch = useTopicStore((state) => state.clearSearch)
 
+  // Track isSearchActive in a ref to avoid triggering the effect when it changes
+  const isSearchActiveRef = useRef(isSearchActive)
+  isSearchActiveRef.current = isSearchActive
+
   // Server-side search trigger (for 3+ char queries)
   useEffect(() => {
     if (searchQuery.trim().length >= 3 && activeConnectionId && selectedTopic) {
@@ -226,10 +230,10 @@ export function MessageViewer() {
         searchMessages(activeConnectionId, selectedTopic, searchQuery.trim(), filters.partition)
       }, 500)
       return () => clearTimeout(timer)
-    } else if (searchQuery.trim().length < 3 && isSearchActive) {
+    } else if (searchQuery.trim().length < 3 && isSearchActiveRef.current) {
       clearSearch()
     }
-  }, [searchQuery, activeConnectionId, selectedTopic, filters.partition, searchMessages, clearSearch, isSearchActive])
+  }, [searchQuery, activeConnectionId, selectedTopic, filters.partition, searchMessages, clearSearch])
 
   // Memoize parsed messages to avoid re-parsing JSON on every render
   const parsedMessages = useMemo<ParsedMessage[]>(() => {
@@ -261,14 +265,13 @@ export function MessageViewer() {
       const { parsed, isJson } = tryParseJson(message.value || '')
       const stringified = isJson ? JSON.stringify(parsed) : (message.value || '')
       const preview = stringified.substring(0, 100) + (stringified.length > 100 ? '...' : '')
-      const headerEntries = Object.entries(message.headers ?? {}).flatMap(([k, v]) => [k, String(v)])
       return {
         ...message,
         parsedValue: parsed,
         isJson,
         messageId: `${message.partition}-${message.offset}`,
         stringifiedPreview: preview,
-        _searchText: [preview, message.value || '', message.key || '', ...headerEntries].join('\0').toLowerCase()
+        _searchText: '' // Not used for server-side search results
       }
     })
   }, [searchResults])

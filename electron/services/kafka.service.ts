@@ -431,14 +431,13 @@ export class KafkaService {
           resolved = true
           if (idleTimer) clearTimeout(idleTimer)
           clearTimeout(overallTimeout)
-          cleanup().then(() =>
-            resolve({
+          const result = {
               messages,
               hasMore,
               nextOffset: hasMore && lastOffset ? String(BigInt(lastOffset) + 1n) : null,
               nextPartition: hasMore ? lastPartition : undefined
-            })
-          )
+            }
+          cleanup().then(() => resolve(result)).catch(() => resolve(result))
         }
 
         const resetIdleTimer = () => {
@@ -507,7 +506,7 @@ export class KafkaService {
             resolved = true
             if (idleTimer) clearTimeout(idleTimer)
             clearTimeout(overallTimeout)
-            cleanup().then(() => reject(error))
+            cleanup().then(() => reject(error)).catch(() => reject(error))
           })
       })
     } catch (error) {
@@ -528,6 +527,10 @@ export class KafkaService {
     topic: string,
     options: SearchMessageOptions
   ): Promise<SearchMessageResult> {
+    if (!options.query || typeof options.query !== 'string') {
+      throw new Error('Search query is required')
+    }
+
     const { kafka, admin } = this.getInstance(connectionId)
     const maxScan = Math.min(options.maxScan ?? 100_000, 500_000)
     const maxMatches = Math.min(options.maxMatches ?? 200, 1_000)
@@ -615,8 +618,7 @@ export class KafkaService {
           resolved = true
           if (idleTimer) clearTimeout(idleTimer)
           clearTimeout(overallTimeout)
-          cleanup().then(() =>
-            resolve({
+          const result = {
               matches,
               scanned: scannedCount,
               totalMatches: matches.length,
@@ -624,13 +626,13 @@ export class KafkaService {
               nextOffset: hasMore && lastOffset ? String(BigInt(lastOffset) + 1n) : null,
               nextPartition: hasMore ? lastPartition : undefined,
               cancelled
-            })
-          )
+            }
+          cleanup().then(() => resolve(result)).catch(() => resolve(result))
         }
 
         const resetIdleTimer = () => {
           if (idleTimer) clearTimeout(idleTimer)
-          idleTimer = setTimeout(() => finish(false, false), 3000)
+          idleTimer = setTimeout(() => finish(false, false), 5000)
         }
 
         // Safety-net timeout: 60 seconds
@@ -660,13 +662,20 @@ export class KafkaService {
               const key = message.key?.toString() || ''
               const value = message.value?.toString() || ''
 
+              // Convert headers once upfront (only if headers exist)
+              const headers: Record<string, string> = {}
+              if (message.headers) {
+                for (const [hk, hv] of Object.entries(message.headers)) {
+                  headers[hk] = hv?.toString() || ''
+                }
+              }
+
               let matched = false
               if (key.toLowerCase().includes(queryLower) || value.toLowerCase().includes(queryLower)) {
                 matched = true
-              } else if (message.headers) {
-                for (const [hk, hv] of Object.entries(message.headers)) {
-                  const headerValue = hv?.toString() || ''
-                  if (hk.toLowerCase().includes(queryLower) || headerValue.toLowerCase().includes(queryLower)) {
+              } else {
+                for (const [hk, hv] of Object.entries(headers)) {
+                  if (hk.toLowerCase().includes(queryLower) || hv.toLowerCase().includes(queryLower)) {
                     matched = true
                     break
                   }
@@ -674,13 +683,6 @@ export class KafkaService {
               }
 
               if (matched) {
-                const headers: Record<string, string> = {}
-                if (message.headers) {
-                  for (const [hk, hv] of Object.entries(message.headers)) {
-                    headers[hk] = hv?.toString() || ''
-                  }
-                }
-
                 matches.push({
                   partition: msgPartition,
                   offset: message.offset,
@@ -713,7 +715,7 @@ export class KafkaService {
             resolved = true
             if (idleTimer) clearTimeout(idleTimer)
             clearTimeout(overallTimeout)
-            cleanup().then(() => reject(error))
+            cleanup().then(() => reject(error)).catch(() => reject(error))
           })
       })
     } catch (error) {
