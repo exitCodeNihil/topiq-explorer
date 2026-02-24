@@ -1,4 +1,4 @@
-import { Kafka, Admin, Producer, Consumer, logLevel, SASLOptions } from 'kafkajs'
+import { Kafka, Admin, Producer, Consumer, logLevel, SASLOptions, Partitioners } from 'kafkajs'
 import { randomUUID } from 'crypto'
 import * as tls from 'tls'
 import type {
@@ -7,8 +7,20 @@ import type {
   TopicConfig,
   MessageOptions,
   ProduceMessage,
-  ResetOffsetOptions
+  ResetOffsetOptions,
+  SearchMessageOptions,
+  SearchMessageResult
 } from '../../shared/types'
+
+// Large message protection: truncate oversized payloads before sending to renderer
+const MAX_VALUE_SIZE = 1_048_576  // 1MB
+const MAX_KEY_SIZE = 10_240       // 10KB
+const MAX_HEADER_VALUE_SIZE = 10_240  // 10KB
+
+const truncate = (s: string | null | undefined, max: number): string | null => {
+  if (s == null) return null
+  return s.length > max ? s.slice(0, max) + '\n...[truncated]' : s
+}
 
 interface KafkaInstance {
   kafka: Kafka
@@ -20,6 +32,7 @@ interface KafkaInstance {
 export class KafkaService {
   private instances: Map<string, KafkaInstance> = new Map()
   private tempConsumerGroups: Map<string, Set<string>> = new Map()
+  private activeSearches: Map<string, { cancelled: boolean }> = new Map()
 
   private trackTempGroup(connectionId: string, groupId: string): void {
     if (!this.tempConsumerGroups.has(connectionId)) {
@@ -130,7 +143,7 @@ export class KafkaService {
 
     const kafka = this.createKafkaClient(connection)
     const admin = kafka.admin()
-    const producer = kafka.producer()
+    const producer = kafka.producer({ createPartitioner: Partitioners.LegacyPartitioner })
 
     await admin.connect()
     await producer.connect()
@@ -149,15 +162,17 @@ export class KafkaService {
 
     const errors: Error[] = []
 
-    // Disconnect all consumers
-    for (const consumer of instance.consumers.values()) {
+    // Copy consumers before clearing to prevent race with concurrent additions
+    const consumersToDisconnect = new Map(instance.consumers)
+    instance.consumers.clear()
+
+    for (const consumer of consumersToDisconnect.values()) {
       try {
         await consumer.disconnect()
       } catch (error) {
         errors.push(error instanceof Error ? error : new Error(String(error)))
       }
     }
-    instance.consumers.clear()
 
     // Clean up any tracked temporary consumer groups before disconnecting admin
     try {
@@ -340,8 +355,7 @@ export class KafkaService {
     const { kafka, admin } = this.getInstance(connectionId)
     const { partition, fromOffset, fromTimestamp, limit = 100 } = options
 
-    // Hard cap at 500 messages maximum
-    const maxLimit = Math.min(limit, 500)
+    const maxLimit = limit
 
     // 1. Pre-check offsets via admin API — short-circuit if empty
     const topicOffsets = await admin.fetchTopicOffsets(topic)
@@ -394,12 +408,12 @@ export class KafkaService {
     const cleanup = async () => {
       if (cleanedUp) return
       cleanedUp = true
-      await consumer.disconnect()
+      try {
+        await consumer.disconnect()
+      } catch { /* swallow */ }
       try {
         await admin.deleteGroups([groupId])
-      } catch {
-        // Group may already be deleted or not exist, ignore
-      }
+      } catch { /* group may already be deleted */ }
       this.untrackTempGroup(connectionId, groupId)
     }
 
@@ -428,23 +442,22 @@ export class KafkaService {
           resolved = true
           if (idleTimer) clearTimeout(idleTimer)
           clearTimeout(overallTimeout)
-          cleanup().then(() =>
-            resolve({
+          const result = {
               messages,
               hasMore,
               nextOffset: hasMore && lastOffset ? String(BigInt(lastOffset) + 1n) : null,
               nextPartition: hasMore ? lastPartition : undefined
-            })
-          )
+            }
+          cleanup().then(() => resolve(result)).catch(() => resolve(result))
         }
 
         const resetIdleTimer = () => {
           if (idleTimer) clearTimeout(idleTimer)
-          idleTimer = setTimeout(() => finish(false), 2000)
+          idleTimer = setTimeout(() => finish(false), 5000)
         }
 
-        // Overall safety-net timeout: 15 seconds
-        const overallTimeout = setTimeout(() => finish(false), 15000)
+        // Overall safety-net timeout: 30 seconds
+        const overallTimeout = setTimeout(() => finish(false), 30000)
 
         consumer
           .run({
@@ -464,7 +477,7 @@ export class KafkaService {
               const headers: Record<string, string> = {}
               if (message.headers) {
                 for (const [key, value] of Object.entries(message.headers)) {
-                  headers[key] = value?.toString() || ''
+                  headers[key] = truncate(value?.toString() || '', MAX_HEADER_VALUE_SIZE) || ''
                 }
               }
 
@@ -472,8 +485,8 @@ export class KafkaService {
                 partition: msgPartition,
                 offset: message.offset,
                 timestamp: message.timestamp,
-                key: message.key?.toString() || null,
-                value: message.value?.toString() || null,
+                key: truncate(message.key?.toString() || null, MAX_KEY_SIZE),
+                value: truncate(message.value?.toString() || null, MAX_VALUE_SIZE),
                 headers
               })
 
@@ -504,7 +517,221 @@ export class KafkaService {
             resolved = true
             if (idleTimer) clearTimeout(idleTimer)
             clearTimeout(overallTimeout)
-            cleanup().then(() => reject(error))
+            cleanup().then(() => reject(error)).catch(() => reject(error))
+          })
+      })
+    } catch (error) {
+      await cleanup()
+      throw error
+    }
+  }
+
+  cancelSearch(requestId: string): void {
+    const state = this.activeSearches.get(requestId)
+    if (state) {
+      state.cancelled = true
+    }
+  }
+
+  async searchMessages(
+    connectionId: string,
+    topic: string,
+    options: SearchMessageOptions
+  ): Promise<SearchMessageResult> {
+    if (!options.query || typeof options.query !== 'string') {
+      throw new Error('Search query is required')
+    }
+
+    const { kafka, admin } = this.getInstance(connectionId)
+    const maxScan = options.maxScan ?? 100_000
+    const maxMatches = options.maxMatches ?? 200
+    const requestId = options.requestId ?? randomUUID()
+
+    const searchState = { cancelled: false }
+    this.activeSearches.set(requestId, searchState)
+
+    // Pre-check offsets via admin API
+    const topicOffsets = await admin.fetchTopicOffsets(topic)
+    const targetOffsets = options.partition !== undefined
+      ? topicOffsets.filter((o) => o.partition === options.partition)
+      : topicOffsets
+
+    // Build seek map: partition -> { seekOffset, high }
+    const seekMap = new Map<number, { seekOffset: string; high: string }>()
+
+    if (options.fromOffset && options.fromPartition !== undefined) {
+      // Resume: start from the given partition/offset, then continue with remaining partitions
+      for (const off of targetOffsets) {
+        if (off.partition < options.fromPartition) continue
+        const seekOffset = off.partition === options.fromPartition ? options.fromOffset : off.low
+        seekMap.set(off.partition, { seekOffset, high: off.high })
+      }
+    } else {
+      for (const off of targetOffsets) {
+        seekMap.set(off.partition, { seekOffset: off.low, high: off.high })
+      }
+    }
+
+    // Check if there are any messages to scan
+    let totalAvailable = 0
+    for (const [, { seekOffset, high }] of seekMap) {
+      const available = Number(BigInt(high) - BigInt(seekOffset))
+      if (available > 0) totalAvailable += available
+    }
+
+    if (totalAvailable === 0) {
+      this.activeSearches.delete(requestId)
+      return { matches: [], scanned: 0, totalMatches: 0, hasMore: false, nextOffset: null, cancelled: false }
+    }
+
+    const queryLower = options.query.toLowerCase()
+    const groupId = `topiq-explorer-search-${randomUUID()}`
+    const consumer = kafka.consumer({ groupId })
+
+    this.trackTempGroup(connectionId, groupId)
+
+    let cleanedUp = false
+    const cleanup = async () => {
+      if (cleanedUp) return
+      cleanedUp = true
+      this.activeSearches.delete(requestId)
+      try {
+        await consumer.disconnect()
+      } catch { /* swallow */ }
+      try {
+        await admin.deleteGroups([groupId])
+      } catch { /* group may already be deleted */ }
+      this.untrackTempGroup(connectionId, groupId)
+    }
+
+    try {
+      await consumer.connect()
+      await consumer.subscribe({ topic, fromBeginning: true })
+
+      const matches: Array<{
+        partition: number
+        offset: string
+        timestamp: string
+        key: string | null
+        value: string | null
+        headers: Record<string, string>
+      }> = []
+
+      return new Promise<SearchMessageResult>((resolve, reject) => {
+        let scannedCount = 0
+        let lastOffset: string | null = null
+        let lastPartition: number | undefined
+        let resolved = false
+        let idleTimer: ReturnType<typeof setTimeout> | null = null
+
+        const finish = (hasMore: boolean, cancelled: boolean) => {
+          if (resolved) return
+          resolved = true
+          if (idleTimer) clearTimeout(idleTimer)
+          clearTimeout(overallTimeout)
+          const result = {
+              matches,
+              scanned: scannedCount,
+              totalMatches: matches.length,
+              hasMore,
+              nextOffset: hasMore && lastOffset ? String(BigInt(lastOffset) + 1n) : null,
+              nextPartition: hasMore ? lastPartition : undefined,
+              cancelled
+            }
+          cleanup().then(() => resolve(result)).catch(() => resolve(result))
+        }
+
+        const resetIdleTimer = () => {
+          if (idleTimer) clearTimeout(idleTimer)
+          idleTimer = setTimeout(() => finish(false, false), 8000)
+        }
+
+        // Safety-net timeout: 60 seconds
+        const overallTimeout = setTimeout(() => finish(true, false), 60000)
+
+        consumer
+          .run({
+            eachMessage: async ({ partition: msgPartition, message }) => {
+              if (resolved) return
+
+              // Check cancellation
+              if (searchState.cancelled) {
+                finish(true, true)
+                return
+              }
+
+              // Filter by partition if specified
+              if (options.partition !== undefined && msgPartition !== options.partition) {
+                return
+              }
+
+              scannedCount++
+              lastOffset = message.offset
+              lastPartition = msgPartition
+
+              // Match check: case-insensitive substring on key, value, and headers
+              const key = message.key?.toString() || ''
+              const value = message.value?.toString() || ''
+
+              // Convert headers once upfront (only if headers exist)
+              const headers: Record<string, string> = {}
+              if (message.headers) {
+                for (const [hk, hv] of Object.entries(message.headers)) {
+                  headers[hk] = hv?.toString() || ''
+                }
+              }
+
+              let matched = false
+              if (key.toLowerCase().includes(queryLower) || value.toLowerCase().includes(queryLower)) {
+                matched = true
+              } else {
+                for (const [hk, hv] of Object.entries(headers)) {
+                  if (hk.toLowerCase().includes(queryLower) || hv.toLowerCase().includes(queryLower)) {
+                    matched = true
+                    break
+                  }
+                }
+              }
+
+              if (matched) {
+                // Truncate headers for the result sent to renderer
+                const truncatedHeaders: Record<string, string> = {}
+                for (const [hk, hv] of Object.entries(headers)) {
+                  truncatedHeaders[hk] = truncate(hv, MAX_HEADER_VALUE_SIZE) || ''
+                }
+                matches.push({
+                  partition: msgPartition,
+                  offset: message.offset,
+                  timestamp: message.timestamp,
+                  key: truncate(key || null, MAX_KEY_SIZE),
+                  value: truncate(value || null, MAX_VALUE_SIZE),
+                  headers: truncatedHeaders
+                })
+              }
+
+              // Stopping conditions
+              if (matches.length >= maxMatches) {
+                finish(true, false)
+              } else if (scannedCount >= maxScan) {
+                finish(true, false)
+              } else {
+                resetIdleTimer()
+              }
+            }
+          })
+          .then(() => {
+            // Seek to exact offsets after run() starts
+            for (const [p, { seekOffset }] of seekMap) {
+              consumer.seek({ topic, partition: p, offset: seekOffset })
+            }
+            resetIdleTimer()
+          })
+          .catch((error) => {
+            if (resolved) return
+            resolved = true
+            if (idleTimer) clearTimeout(idleTimer)
+            clearTimeout(overallTimeout)
+            cleanup().then(() => reject(error)).catch(() => reject(error))
           })
       })
     } catch (error) {
