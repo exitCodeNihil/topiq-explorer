@@ -343,8 +343,7 @@ export class KafkaService {
     const { kafka, admin } = this.getInstance(connectionId)
     const { partition, fromOffset, fromTimestamp, limit = 100 } = options
 
-    // Hard cap at 1000 messages maximum
-    const maxLimit = Math.min(limit, 1000)
+    const maxLimit = limit
 
     // 1. Pre-check offsets via admin API — short-circuit if empty
     const topicOffsets = await admin.fetchTopicOffsets(topic)
@@ -442,11 +441,11 @@ export class KafkaService {
 
         const resetIdleTimer = () => {
           if (idleTimer) clearTimeout(idleTimer)
-          idleTimer = setTimeout(() => finish(false), 2000)
+          idleTimer = setTimeout(() => finish(false), 5000)
         }
 
-        // Overall safety-net timeout: 15 seconds
-        const overallTimeout = setTimeout(() => finish(false), 15000)
+        // Overall safety-net timeout: 30 seconds
+        const overallTimeout = setTimeout(() => finish(false), 30000)
 
         consumer
           .run({
@@ -532,8 +531,8 @@ export class KafkaService {
     }
 
     const { kafka, admin } = this.getInstance(connectionId)
-    const maxScan = Math.min(options.maxScan ?? 100_000, 500_000)
-    const maxMatches = Math.min(options.maxMatches ?? 200, 1_000)
+    const maxScan = options.maxScan ?? 100_000
+    const maxMatches = options.maxMatches ?? 200
     const requestId = options.requestId ?? randomUUID()
 
     const searchState = { cancelled: false }
@@ -632,7 +631,7 @@ export class KafkaService {
 
         const resetIdleTimer = () => {
           if (idleTimer) clearTimeout(idleTimer)
-          idleTimer = setTimeout(() => finish(false, false), 5000)
+          idleTimer = setTimeout(() => finish(false, false), 8000)
         }
 
         // Safety-net timeout: 60 seconds

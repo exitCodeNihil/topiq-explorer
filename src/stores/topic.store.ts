@@ -10,6 +10,7 @@ interface MessageToRepublish {
 
 // Track request IDs to prevent stale data from race conditions
 let messageRequestId = 0
+let searchRequestCounter = 0
 // Track in-flight requests to prevent duplicates
 const inFlightRequests = new Map<string, Promise<void>>()
 
@@ -317,13 +318,7 @@ export const useTopicStore = create<TopicState>((set) => ({
         nextPartition = typedResult?.nextPartition
       }
 
-      const MAX_MESSAGES = 10000
-      let combined = [...state.messages, ...newMessages]
-      if (combined.length > MAX_MESSAGES) {
-        combined = combined.slice(combined.length - MAX_MESSAGES)
-      }
-
-      set({ messages: combined, hasMore, nextOffset, nextPartition, isLoadingMore: false })
+      set({ messages: [...state.messages, ...newMessages], hasMore, nextOffset, nextPartition, isLoadingMore: false })
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to load more messages'
       set({ messageError: errorMsg, isLoadingMore: false })
@@ -366,7 +361,7 @@ export const useTopicStore = create<TopicState>((set) => ({
       }
     }
 
-    const currentRequestId = `search-${++messageRequestId}`
+    const currentRequestId = `search-${++searchRequestCounter}`
     set({
       isSearchActive: true,
       isSearching: true,
@@ -421,7 +416,7 @@ export const useTopicStore = create<TopicState>((set) => ({
     const state = useTopicStore.getState()
     if (!state.searchHasMore || !state.searchNextOffset || state.isSearching) return
 
-    const currentRequestId = `search-${++messageRequestId}`
+    const currentRequestId = `search-${++searchRequestCounter}`
     set({ isSearching: true, searchRequestId: currentRequestId })
 
     try {
@@ -442,15 +437,10 @@ export const useTopicStore = create<TopicState>((set) => ({
           throw new Error(typedResult.error || 'Search failed')
         }
         const data = typedResult.data!
-        const MAX_SEARCH_RESULTS = 5000
-        let combined = [...state.searchResults, ...data.matches]
-        if (combined.length > MAX_SEARCH_RESULTS) {
-          combined = combined.slice(combined.length - MAX_SEARCH_RESULTS)
-        }
         set({
-          searchResults: combined,
+          searchResults: [...state.searchResults, ...data.matches],
           searchScanned: state.searchScanned + data.scanned,
-          searchTotalMatches: combined.length,
+          searchTotalMatches: state.searchResults.length + data.matches.length,
           searchHasMore: data.hasMore,
           searchNextOffset: data.nextOffset,
           searchNextPartition: data.nextPartition,
