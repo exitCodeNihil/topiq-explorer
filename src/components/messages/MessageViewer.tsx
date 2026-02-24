@@ -6,7 +6,8 @@ import { MessageFilters } from './MessageFilters'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatJson, formatTimestamp, tryParseJson } from '@/lib/utils'
-import { RefreshCw, Copy, ChevronDown, ChevronRight, MessageSquare, Trash2, RotateCcw, Loader2, Search, X, AlertCircle } from 'lucide-react'
+import { RefreshCw, Copy, ChevronDown, ChevronRight, ChevronLeft, MessageSquare, Trash2, RotateCcw, Loader2, Search, X, AlertCircle } from 'lucide-react'
+import { HighlightText } from './HighlightText'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from '@/hooks/use-toast'
@@ -39,13 +40,14 @@ interface ParsedMessage extends KafkaMessage {
 interface MessageRowProps {
   message: ParsedMessage
   isExpanded: boolean
+  searchQuery: string
   onToggle: (messageId: string) => void
   onCopy: (message: ParsedMessage) => void
   onRepublish: (message: ParsedMessage) => void
   onTombstone: (message: ParsedMessage) => void
 }
 
-const MessageRow = memo(function MessageRow({ message, isExpanded, onToggle, onCopy, onRepublish, onTombstone }: MessageRowProps) {
+const MessageRow = memo(function MessageRow({ message, isExpanded, searchQuery, onToggle, onCopy, onRepublish, onTombstone }: MessageRowProps) {
   return (
     <div className="group border-b border-border last:border-b-0">
       <div
@@ -73,13 +75,13 @@ const MessageRow = memo(function MessageRow({ message, isExpanded, onToggle, onC
             </span>
             {message.key && (
               <Badge variant="outline" className="font-mono text-xs">
-                Key: {message.key}
+                Key: <HighlightText text={message.key} query={searchQuery} />
               </Badge>
             )}
           </div>
 
           <div className="mt-1 truncate font-mono text-sm text-muted-foreground">
-            {message.stringifiedPreview || '(empty)'}
+            <HighlightText text={message.stringifiedPreview || '(empty)'} query={searchQuery} />
           </div>
         </div>
 
@@ -102,7 +104,7 @@ const MessageRow = memo(function MessageRow({ message, isExpanded, onToggle, onC
             <div>
               <h4 className="text-xs font-medium text-muted-foreground mb-1">Value</h4>
               <pre className="json-viewer overflow-auto rounded-md bg-background p-3 text-sm">
-                {message.isJson ? formatJson(message.value || '') : message.value || '(empty)'}
+                <HighlightText text={message.isJson ? formatJson(message.value || '') : message.value || '(empty)'} query={searchQuery} />
               </pre>
             </div>
 
@@ -110,7 +112,7 @@ const MessageRow = memo(function MessageRow({ message, isExpanded, onToggle, onC
               <div>
                 <h4 className="text-xs font-medium text-muted-foreground mb-1">Key</h4>
                 <pre className="json-viewer overflow-auto rounded-md bg-background p-3 text-sm">
-                  {message.key}
+                  <HighlightText text={message.key} query={searchQuery} />
                 </pre>
               </div>
             )}
@@ -119,7 +121,7 @@ const MessageRow = memo(function MessageRow({ message, isExpanded, onToggle, onC
               <div>
                 <h4 className="text-xs font-medium text-muted-foreground mb-1">Headers</h4>
                 <pre className="json-viewer overflow-auto rounded-md bg-background p-3 text-sm">
-                  {JSON.stringify(message.headers, null, 2)}
+                  <HighlightText text={JSON.stringify(message.headers, null, 2)} query={searchQuery} />
                 </pre>
               </div>
             )}
@@ -189,6 +191,11 @@ export function MessageViewer() {
   const [isSendingTombstone, setIsSendingTombstone] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageOffsetCache, setPageOffsetCache] = useState<Map<number, { offset: string; partition?: number }>>(new Map())
+  const [searchPage, setSearchPage] = useState(1)
+  const [pageInput, setPageInput] = useState('1')
+  const [searchPageInput, setSearchPageInput] = useState('1')
 
   // Client-side filter debounce (for 1-2 char queries)
   useEffect(() => {
@@ -203,9 +210,8 @@ export function MessageViewer() {
   const produceMessage = useTopicStore((state) => state.produceMessage)
   const setMessageToRepublish = useTopicStore((state) => state.setMessageToRepublish)
   const messageError = useTopicStore((state) => state.messageError)
-  const hasMore = useTopicStore((state) => state.hasMore)
   const isLoadingMore = useTopicStore((state) => state.isLoadingMore)
-  const loadMoreMessages = useTopicStore((state) => state.loadMoreMessages)
+  const topicMetadata = useTopicStore((state) => state.topicMetadata)
   const activeConnectionId = useConnectionStore((state) => state.activeConnectionId)
 
   // Server-side search state
@@ -234,6 +240,20 @@ export function MessageViewer() {
       clearSearch()
     }
   }, [searchQuery, activeConnectionId, selectedTopic, filters.partition, searchMessages, clearSearch])
+
+  // Reset pagination on topic, filter, or search changes
+  useEffect(() => {
+    setCurrentPage(1)
+    setPageOffsetCache(new Map())
+    setSearchPage(1)
+  }, [selectedTopic, filters, searchQuery])
+
+  // Sync page inputs with current page values
+  useEffect(() => { setPageInput(String(currentPage)) }, [currentPage])
+  useEffect(() => { setSearchPageInput(String(searchPage)) }, [searchPage])
+
+  // Derive active search query for highlighting (covers both client-side and server-side search)
+  const activeSearchQuery = searchQuery.trim()
 
   // Memoize parsed messages to avoid re-parsing JSON on every render
   const parsedMessages = useMemo<ParsedMessage[]>(() => {
@@ -276,17 +296,101 @@ export function MessageViewer() {
     })
   }, [searchResults])
 
-  const displayMessages = isSearchActive ? parsedSearchResults : filteredMessages
+  const pageSize = filters.limit || 100
+
+  const totalMessages = useMemo(() => {
+    if (!topicMetadata) return 0
+    const parts = filters.partition !== undefined
+      ? topicMetadata.partitions.filter(p => p.partition === filters.partition)
+      : topicMetadata.partitions
+    return parts.reduce((sum, p) => sum + (parseInt(p.high) - parseInt(p.low)), 0)
+  }, [topicMetadata, filters.partition])
+
+  const totalPages = useMemo(() => {
+    if (totalMessages === 0) return 1
+    return Math.max(1, Math.ceil(totalMessages / pageSize))
+  }, [totalMessages, pageSize])
+
+  // For search results: client-side pagination through accumulated results
+  const searchDisplayMessages = useMemo(() => {
+    if (!isSearchActive) return []
+    const start = (searchPage - 1) * pageSize
+    return parsedSearchResults.slice(start, start + pageSize)
+  }, [isSearchActive, parsedSearchResults, searchPage, pageSize])
+
+  const searchTotalPages = isSearchActive ? Math.max(1, Math.ceil(parsedSearchResults.length / pageSize)) : 1
+
+  // For normal messages: the full page is already loaded from backend
+  const displayMessages = isSearchActive ? searchDisplayMessages : filteredMessages
 
   const handleRefresh = useCallback(async () => {
     if (!activeConnectionId || !selectedTopic) return
+    setCurrentPage(1)
+    setPageOffsetCache(new Map())
     await loadMessages(activeConnectionId, selectedTopic, filters)
   }, [activeConnectionId, selectedTopic, filters, loadMessages])
 
-  const handleLoadMore = useCallback(async () => {
+  const handleJumpToPage = useCallback(async (page: number) => {
     if (!activeConnectionId || !selectedTopic) return
-    await loadMoreMessages(activeConnectionId, selectedTopic)
-  }, [activeConnectionId, selectedTopic, loadMoreMessages])
+    if (page < 1 || page > totalPages || page === currentPage) return
+
+    setCurrentPage(page)
+
+    if (page === 1) {
+      await loadMessages(activeConnectionId, selectedTopic, filters)
+    } else {
+      const cached = pageOffsetCache.get(page)
+      if (cached) {
+        await loadMessages(activeConnectionId, selectedTopic, { ...filters, fromOffset: cached.offset, partition: cached.partition })
+      } else if (topicMetadata) {
+        const parts = filters.partition !== undefined
+          ? topicMetadata.partitions.filter(p => p.partition === filters.partition)
+          : topicMetadata.partitions
+        if (parts.length === 0) return
+
+        const skip = (page - 1) * pageSize
+        if (parts.length === 1) {
+          const fromOffset = String(parseInt(parts[0].low) + skip)
+          await loadMessages(activeConnectionId, selectedTopic, { ...filters, fromOffset })
+        } else {
+          const minLow = Math.min(...parts.map(p => parseInt(p.low)))
+          const perPartitionSkip = Math.floor(skip / parts.length)
+          const fromOffset = String(minLow + perPartitionSkip)
+          await loadMessages(activeConnectionId, selectedTopic, { ...filters, fromOffset })
+        }
+      }
+    }
+
+    // Cache nextOffset for sequential forward navigation
+    const state = useTopicStore.getState()
+    if (state.nextOffset) {
+      setPageOffsetCache(prev => {
+        const next = new Map(prev)
+        next.set(page + 1, { offset: state.nextOffset!, partition: state.nextPartition })
+        return next
+      })
+    }
+  }, [activeConnectionId, selectedTopic, totalPages, currentPage, pageOffsetCache, filters, topicMetadata, pageSize, loadMessages])
+
+  const handleNextPage = useCallback(async () => {
+    if (isSearchActive) {
+      if (searchPage < searchTotalPages) {
+        setSearchPage(searchPage + 1)
+      }
+      return
+    }
+    await handleJumpToPage(currentPage + 1)
+  }, [isSearchActive, searchPage, searchTotalPages, currentPage, handleJumpToPage])
+
+  const handlePrevPage = useCallback(async () => {
+    if (isSearchActive) {
+      if (searchPage > 1) {
+        setSearchPage(searchPage - 1)
+      }
+      return
+    }
+    await handleJumpToPage(currentPage - 1)
+  }, [isSearchActive, searchPage, currentPage, handleJumpToPage])
 
   const handleSearchMore = useCallback(async () => {
     if (!activeConnectionId || !selectedTopic) return
@@ -478,6 +582,7 @@ export function MessageViewer() {
               <MessageRow
                 message={message}
                 isExpanded={expandedMessages.has(message.messageId)}
+                searchQuery={activeSearchQuery}
                 onToggle={toggleExpanded}
                 onCopy={copyToClipboard}
                 onRepublish={handleRepublish}
@@ -494,10 +599,12 @@ export function MessageViewer() {
           {isSearchActive
             ? isSearching
               ? 'Scanning...'
-              : `${displayMessages.length} matches found (${searchScanned.toLocaleString()} messages scanned)`
+              : `${parsedSearchResults.length} matches found (${searchScanned.toLocaleString()} messages scanned)`
             : searchQuery.trim()
               ? `${filteredMessages.length} of ${parsedMessages.length} messages match`
-              : `${messages.length} messages loaded`}
+              : totalMessages > 0
+                ? `${((currentPage - 1) * pageSize + 1).toLocaleString()}–${((currentPage - 1) * pageSize + messages.length).toLocaleString()} of ~${totalMessages.toLocaleString()} messages`
+                : `${messages.length} messages loaded`}
         </span>
         <div className="flex items-center gap-2">
           {searchError && (
@@ -508,11 +615,94 @@ export function MessageViewer() {
               Scan More
             </Button>
           )}
-          {!isSearchActive && hasMore && !searchQuery.trim() && (
-            <Button variant="outline" size="sm" onClick={handleLoadMore} disabled={isLoadingMore}>
-              {isLoadingMore && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-              Load More
-            </Button>
+          {isSearchActive ? (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setSearchPage(searchPage - 1)}
+                disabled={searchPage <= 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="px-2 flex items-center gap-1">
+                Page
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={searchPageInput}
+                  onChange={(e) => setSearchPageInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const page = parseInt(searchPageInput)
+                      if (!isNaN(page) && page >= 1 && page <= searchTotalPages) {
+                        setSearchPage(page)
+                      } else {
+                        setSearchPageInput(String(searchPage))
+                      }
+                    }
+                  }}
+                  onBlur={() => setSearchPageInput(String(searchPage))}
+                  className="w-12 text-center bg-transparent border border-transparent focus:border-border focus:outline-none rounded px-1"
+                />
+                of {searchTotalPages}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setSearchPage(searchPage + 1)}
+                disabled={searchPage >= searchTotalPages}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handlePrevPage}
+                disabled={currentPage <= 1 || isLoadingMessages || isLoadingMore}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="px-2 flex items-center gap-1">
+                Page
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={pageInput}
+                  onChange={(e) => setPageInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const page = parseInt(pageInput)
+                      if (!isNaN(page) && page >= 1 && page <= totalPages) {
+                        handleJumpToPage(page)
+                      } else {
+                        setPageInput(String(currentPage))
+                      }
+                    }
+                  }}
+                  onBlur={() => setPageInput(String(currentPage))}
+                  className="w-12 text-center bg-transparent border border-transparent focus:border-border focus:outline-none rounded px-1"
+                  disabled={isLoadingMessages || isLoadingMore}
+                />
+                of {totalPages}
+                {(isLoadingMessages || isLoadingMore) && <Loader2 className="ml-1 inline h-3 w-3 animate-spin" />}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handleNextPage}
+                disabled={currentPage >= totalPages || isLoadingMessages || isLoadingMore}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           )}
         </div>
       </div>
