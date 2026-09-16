@@ -6,7 +6,7 @@ Thanks for your interest in contributing! This guide will help you get started.
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - Yarn
 
 ### Setup
@@ -20,31 +20,28 @@ cd topiq-explorer
 yarn install
 
 # Start the development server
-yarn electron:dev
+yarn dev
 ```
 
 ## Branching Model
 
 | Branch | Purpose |
 |--------|---------|
-| `main` | Production releases — auto-release workflow runs here |
-| `develop` | Integration branch for features |
-| `feature/*` | New features and enhancements |
-| `hotfix/*` | Urgent fixes branched from `main` |
+| `main` | The only long-lived branch — every merge is auto-released |
+| `feature/*`, `fix/*` | Short-lived branches off `main`, squash-merged via PR |
 
 ## Submitting a Pull Request
 
-1. Create a branch from `develop` for features, or from `main` for hotfixes
+1. Create a branch from `main`
 2. Make your changes and commit with clear, descriptive messages
-3. Open a PR targeting the appropriate base branch:
-   - **Features / enhancements** → target `develop`
-   - **Hotfixes** → target `main`
-4. Add a release label (required for PRs to `main`) — see [RELEASING.md](RELEASING.md)
+3. Open a PR targeting `main`
+4. Add a release label (required) — see [RELEASING.md](RELEASING.md)
 5. Fill out the PR template and ensure the checklist is complete
+6. PRs are squash-merged; the squash commit message must keep the `(#<PR number>)` suffix so the release workflow can find the label
 
-### Release Labels (Required for PRs to `main`)
+### Release Labels (Required)
 
-When your PR targets `main`, you **must** add a release label to control the version bump:
+Every PR to `main` **must** carry a release label to control the version bump:
 
 - `release:major` — breaking changes
 - `release:minor` — new features, enhancements

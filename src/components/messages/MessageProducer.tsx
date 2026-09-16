@@ -61,7 +61,7 @@ export function MessageProducer({ topic, onClose }: MessageProducerProps) {
 
   const updateHeader = (index: number, field: 'key' | 'value', value: string) => {
     const newHeaders = [...headers]
-    newHeaders[index][field] = value
+    newHeaders[index] = { ...newHeaders[index], [field]: value }
     setHeaders(newHeaders)
   }
 

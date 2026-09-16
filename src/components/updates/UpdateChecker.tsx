@@ -15,7 +15,7 @@ export function UpdateChecker() {
   const [availableVersion, setAvailableVersion] = useState('')
 
   useEffect(() => {
-    window.api.updater.getVersion().then(setAppVersion)
+    window.api.updater.getVersion().then(setAppVersion).catch(() => {})
   }, [])
 
   useEffect(() => {

@@ -12,6 +12,10 @@ autoUpdater.allowPrerelease = false
 autoUpdater.allowDowngrade = false
 
 let mainWindow: BrowserWindow | null = null
+
+function sendToWindow(channel: string, ...args: unknown[]) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args)
+}
 const kafkaService = new KafkaService()
 const connectionStore = new ConnectionStore()
 
@@ -82,27 +86,27 @@ app.whenReady().then(() => {
 
 // Forward autoUpdater events to renderer
 autoUpdater.on('checking-for-update', () => {
-  mainWindow?.webContents.send('updater:checking-for-update')
+  sendToWindow('updater:checking-for-update')
 })
 
 autoUpdater.on('update-available', (info) => {
-  mainWindow?.webContents.send('updater:update-available', info)
+  sendToWindow('updater:update-available', info)
 })
 
 autoUpdater.on('update-not-available', (info) => {
-  mainWindow?.webContents.send('updater:update-not-available', info)
+  sendToWindow('updater:update-not-available', info)
 })
 
 autoUpdater.on('download-progress', (progress) => {
-  mainWindow?.webContents.send('updater:download-progress', progress)
+  sendToWindow('updater:download-progress', progress)
 })
 
 autoUpdater.on('update-downloaded', (info) => {
-  mainWindow?.webContents.send('updater:update-downloaded', info)
+  sendToWindow('updater:update-downloaded', info)
 })
 
 autoUpdater.on('error', (error) => {
-  mainWindow?.webContents.send('updater:error', error.message)
+  sendToWindow('updater:error', error.message)
 })
 
 app.on('window-all-closed', () => {
@@ -111,8 +115,12 @@ app.on('window-all-closed', () => {
   }
 })
 
-app.on('before-quit', async () => {
-  await kafkaService.disconnectAll()
+let quitting = false
+app.on('before-quit', (event) => {
+  if (quitting) return
+  event.preventDefault()
+  quitting = true
+  kafkaService.disconnectAll().finally(() => app.quit())
 })
 
 // Standardized IPC response helper
@@ -143,7 +151,11 @@ const TOPIC_NAME_REGEX = /^[a-zA-Z0-9._-]+$/
 const MAX_TOPIC_NAME_LENGTH = 249
 const MAX_MESSAGE_SIZE = 10 * 1024 * 1024 // 10MB
 const MAX_SEARCH_QUERY_LENGTH = 1000
-const MAX_LIMIT = 10_000
+const MAX_LIMIT = 1_000
+const MAX_SEARCH_SCAN = 100_000
+const MAX_SEARCH_MATCHES = 1_000
+const MAX_CERT_FILE_SIZE = 1_048_576 // 1MB
+const OFFSET_REGEX = /^\d+$/
 
 function validateConnectionId(id: unknown): asserts id is string {
   if (typeof id !== 'string' || id.length === 0) {
@@ -154,6 +166,32 @@ function validateConnectionId(id: unknown): asserts id is string {
 function validateTopicName(topic: unknown): asserts topic is string {
   if (typeof topic !== 'string' || topic.length === 0 || topic.length > MAX_TOPIC_NAME_LENGTH || !TOPIC_NAME_REGEX.test(topic)) {
     throw new Error('Invalid topic name')
+  }
+}
+
+function isPartition(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 0
+}
+
+function isOffset(v: unknown): v is string {
+  return typeof v === 'string' && OFFSET_REGEX.test(v)
+}
+
+function validateBrokers(connection: unknown): void {
+  if (connection == null || typeof connection !== 'object') throw new Error('Invalid connection')
+  const brokers = (connection as Record<string, unknown>).brokers
+  if (!Array.isArray(brokers) || brokers.length === 0 || !brokers.every((b) => typeof b === 'string' && b.length > 0)) {
+    throw new Error('At least one broker address is required')
+  }
+}
+
+function validateConnectionInput(connection: unknown): void {
+  validateBrokers(connection)
+  const c = connection as Record<string, unknown>
+  if (typeof c.name !== 'string' || c.name.length === 0) throw new Error('Connection name is required')
+  if (c.id !== undefined) {
+    validateConnectionId(c.id)
+    if (['__proto__', 'constructor', 'prototype'].includes(c.id)) throw new Error('Invalid connection ID')
   }
 }
 
@@ -169,8 +207,17 @@ function validateMessageOptions(options: unknown): void {
   if (opts.partition !== undefined && (typeof opts.partition !== 'number' || opts.partition < 0 || !Number.isInteger(opts.partition))) {
     throw new Error('Invalid partition number')
   }
-  if (opts.fromOffset !== undefined && (typeof opts.fromOffset !== 'string' || !/^\d+$/.test(opts.fromOffset))) {
+  if (opts.fromOffset !== undefined && !isOffset(opts.fromOffset)) {
     throw new Error('Invalid offset')
+  }
+  if (opts.fromOffsets !== undefined) {
+    if (opts.fromOffsets == null || typeof opts.fromOffsets !== 'object') throw new Error('Invalid offsets')
+    for (const [p, o] of Object.entries(opts.fromOffsets)) {
+      if (!OFFSET_REGEX.test(p) || !isOffset(o)) throw new Error('Invalid offsets')
+    }
+  }
+  if (opts.fromTimestamp !== undefined && (typeof opts.fromTimestamp !== 'number' || !Number.isFinite(opts.fromTimestamp) || opts.fromTimestamp < 0)) {
+    throw new Error('Invalid timestamp')
   }
   if (opts.limit !== undefined && (typeof opts.limit !== 'number' || opts.limit < 1 || opts.limit > MAX_LIMIT || !Number.isInteger(opts.limit))) {
     throw new Error(`Limit must be between 1 and ${MAX_LIMIT}`)
@@ -185,8 +232,20 @@ function validateSearchOptions(options: unknown): void {
   if (typeof opts.query !== 'string' || opts.query.length === 0 || opts.query.length > MAX_SEARCH_QUERY_LENGTH) {
     throw new Error(`Search query must be between 1 and ${MAX_SEARCH_QUERY_LENGTH} characters`)
   }
-  if (opts.partition !== undefined && (typeof opts.partition !== 'number' || opts.partition < 0 || !Number.isInteger(opts.partition))) {
+  if (opts.partition !== undefined && !isPartition(opts.partition)) {
     throw new Error('Invalid partition number')
+  }
+  if (opts.fromPartition !== undefined && !isPartition(opts.fromPartition)) {
+    throw new Error('Invalid partition number')
+  }
+  if (opts.fromOffset !== undefined && !isOffset(opts.fromOffset)) {
+    throw new Error('Invalid offset')
+  }
+  if (opts.maxScan !== undefined && (typeof opts.maxScan !== 'number' || !Number.isInteger(opts.maxScan) || opts.maxScan < 1 || opts.maxScan > MAX_SEARCH_SCAN)) {
+    throw new Error(`maxScan must be between 1 and ${MAX_SEARCH_SCAN}`)
+  }
+  if (opts.maxMatches !== undefined && (typeof opts.maxMatches !== 'number' || !Number.isInteger(opts.maxMatches) || opts.maxMatches < 1 || opts.maxMatches > MAX_SEARCH_MATCHES)) {
+    throw new Error(`maxMatches must be between 1 and ${MAX_SEARCH_MATCHES}`)
   }
 }
 
@@ -228,6 +287,7 @@ ipcMain.handle('connections:get', (_, id: string) => {
 
 ipcMain.handle('connections:save', (_, connection) => {
   try {
+    validateConnectionInput(connection)
     return ipcSuccess(connectionStore.save(connection))
   } catch (error) {
     return ipcError(error)
@@ -245,7 +305,12 @@ ipcMain.handle('connections:delete', (_, id: string) => {
 })
 
 ipcMain.handle('connections:test', async (_, connection) => {
-  return kafkaService.testConnection(connection)
+  try {
+    validateBrokers(connection)
+    return ipcSuccess(await kafkaService.testConnection(connection))
+  } catch (error) {
+    return ipcError(error)
+  }
 })
 
 ipcMain.handle('connections:pickCertFile', async () => {
@@ -268,6 +333,9 @@ ipcMain.handle('connections:pickCertFile', async () => {
     }
 
     const filePath = result.filePaths[0]
+    if (fs.statSync(filePath).size > MAX_CERT_FILE_SIZE) {
+      return { success: false as const, error: 'File is too large to be a certificate or key.' }
+    }
     const content = fs.readFileSync(filePath, 'utf-8')
 
     if (!content.includes('-----BEGIN ')) {
@@ -459,6 +527,11 @@ ipcMain.handle('kafka:resetOffsets', async (_, connectionId: string, groupId: st
     validateConnectionId(connectionId)
     validateGroupId(groupId)
     validateTopicName(topic)
+    if (options == null || typeof options !== 'object') throw new Error('Reset options are required')
+    if (options.type === 'offset' && !isOffset(options.offset)) throw new Error('Invalid offset')
+    if (options.partitions !== undefined && (!Array.isArray(options.partitions) || !options.partitions.every(isPartition))) {
+      throw new Error('Invalid partition list')
+    }
     await kafkaService.resetOffsets(connectionId, groupId, topic, options)
     return ipcSuccess(undefined)
   } catch (error) {
@@ -472,6 +545,9 @@ ipcMain.handle('kafka:deleteRecords', async (_, connectionId: string, topic: str
     validateTopicName(topic)
     if (!Array.isArray(partitionOffsets) || partitionOffsets.length === 0) {
       throw new Error('Partition offsets are required')
+    }
+    if (!partitionOffsets.every((po) => po && isPartition(po.partition) && isOffset(po.offset))) {
+      throw new Error('Invalid partition offsets')
     }
     await kafkaService.deleteRecords(connectionId, topic, partitionOffsets)
     return ipcSuccess(undefined)
@@ -487,7 +563,7 @@ ipcMain.handle('updater:checkForUpdates', async () => {
   }
   try {
     const result = await autoUpdater.checkForUpdates()
-    if (result && result.updateInfo) {
+    if (result?.isUpdateAvailable) {
       return {
         updateAvailable: true,
         version: result.updateInfo.version,
@@ -497,7 +573,7 @@ ipcMain.handle('updater:checkForUpdates', async () => {
     }
     return { updateAvailable: false, version: app.getVersion() }
   } catch (error) {
-    throw new Error(error instanceof Error ? error.message : 'Failed to check for updates')
+    throw new Error(sanitizeErrorMessage(error instanceof Error ? error.message : 'Failed to check for updates'))
   }
 })
 
@@ -509,7 +585,7 @@ ipcMain.handle('updater:downloadUpdate', async () => {
     await autoUpdater.downloadUpdate()
     return { success: true }
   } catch (error) {
-    throw new Error(error instanceof Error ? error.message : 'Failed to download update')
+    throw new Error(sanitizeErrorMessage(error instanceof Error ? error.message : 'Failed to download update'))
   }
 })
 

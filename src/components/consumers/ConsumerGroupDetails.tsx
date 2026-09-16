@@ -40,7 +40,7 @@ export function ConsumerGroupDetails() {
 
   const selectedGroupId = useConsumerStore((state) => state.selectedGroupId)
   const groupDetails = useConsumerStore((state) => state.groupDetails)
-  const isLoading = useConsumerStore((state) => state.isLoading)
+  const isLoading = useConsumerStore((state) => state.isLoadingDetails)
   const brokerConfig = useConnectionStore((state) => state.brokerConfig)
 
   const groupRelatedConfigs = brokerConfig.filter((c) =>

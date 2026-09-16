@@ -8,6 +8,7 @@ export type {
   ConfigEntry,
   KafkaMessage,
   MessageOptions,
+  MessageFetchResult,
   SearchMessageOptions,
   SearchMessageResult,
   ProduceMessage,

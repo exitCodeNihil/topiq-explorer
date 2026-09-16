@@ -48,6 +48,8 @@ function getStorePath(storeName: string): string {
 
 export class ConnectionStore {
   private store: Store<StoreSchema>
+  // In-memory copy: every store.get() re-reads and re-decrypts the file (10k-iteration PBKDF2)
+  private connections: Record<string, KafkaConnection>
 
   constructor() {
     const encryptionKey = deriveEncryptionKey()
@@ -59,22 +61,23 @@ export class ConnectionStore {
       defaults: {
         connections: {}
       },
-      encryptionKey
+      encryptionKey,
+      // A store that cannot be decrypted (machine ID changed, corrupt file) starts empty instead of crashing the app on boot
+      clearInvalidConfig: true
     })
+    this.connections = this.store.get('connections', {})
   }
 
   getAll(): KafkaConnection[] {
-    const connections = this.store.get('connections', {})
-    return Object.values(connections).sort((a, b) => a.name.localeCompare(b.name))
+    return Object.values(this.connections).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
   }
 
   get(id: string): KafkaConnection | undefined {
-    const connections = this.store.get('connections', {})
-    return connections[id]
+    return this.connections[id]
   }
 
   save(connection: Omit<KafkaConnection, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): KafkaConnection {
-    const connections = this.store.get('connections', {})
+    const connections = this.connections
     const now = Date.now()
 
     const id = connection.id || randomUUID()
@@ -94,7 +97,7 @@ export class ConnectionStore {
   }
 
   delete(id: string): void {
-    const connections = this.store.get('connections', {})
+    const connections = this.connections
     delete connections[id]
     this.store.set('connections', connections)
   }

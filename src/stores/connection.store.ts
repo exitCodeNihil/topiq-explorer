@@ -26,6 +26,8 @@ interface ConnectionState {
   loadBrokerConfig: (connectionId: string) => Promise<void>
 }
 
+const byName = (a: KafkaConnection, b: KafkaConnection) => a.name.localeCompare(b.name)
+
 export const useConnectionStore = create<ConnectionState>((set, get) => ({
   connections: [],
   activeConnectionId: null,
@@ -40,18 +42,9 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   loadConnections: async () => {
     set({ isLoading: true, error: null })
     try {
-      const result = await window.api.connections.getAll() as unknown
-      // Handle standardized IPC response
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; data?: KafkaConnection[]; error?: string }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to load connections')
-        }
-        set({ connections: typedResult.data ?? [], isLoading: false })
-      } else {
-        // Legacy format fallback
-        set({ connections: result as KafkaConnection[], isLoading: false })
-      }
+      const result = await window.api.connections.getAll()
+      if (!result.success) throw new Error(result.error || 'Failed to load connections')
+      set({ connections: result.data, isLoading: false })
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to load connections', isLoading: false })
     }
@@ -60,20 +53,11 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   addConnection: async (connection) => {
     set({ isLoading: true, error: null })
     try {
-      const result = await window.api.connections.save(connection) as unknown
-      // Handle standardized IPC response
-      let saved: KafkaConnection
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; data?: KafkaConnection; error?: string }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to save connection')
-        }
-        saved = typedResult.data!
-      } else {
-        saved = result as KafkaConnection
-      }
+      const result = await window.api.connections.save(connection)
+      if (!result.success) throw new Error(result.error || 'Failed to save connection')
+      const saved = result.data
       set((state) => ({
-        connections: [...state.connections, saved].sort((a, b) => a.name.localeCompare(b.name)),
+        connections: [...state.connections, saved].sort(byName),
         isLoading: false
       }))
       return saved
@@ -86,22 +70,11 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   updateConnection: async (connection) => {
     set({ isLoading: true, error: null })
     try {
-      const result = await window.api.connections.save(connection) as unknown
-      // Handle standardized IPC response
-      let saved: KafkaConnection
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; data?: KafkaConnection; error?: string }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to update connection')
-        }
-        saved = typedResult.data!
-      } else {
-        saved = result as KafkaConnection
-      }
+      const result = await window.api.connections.save(connection)
+      if (!result.success) throw new Error(result.error || 'Failed to update connection')
+      const saved = result.data
       set((state) => ({
-        connections: state.connections
-          .map((c) => (c.id === saved.id ? saved : c))
-          .sort((a, b) => a.name.localeCompare(b.name)),
+        connections: state.connections.map((c) => (c.id === saved.id ? saved : c)).sort(byName),
         isLoading: false
       }))
       return saved
@@ -114,14 +87,8 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   deleteConnection: async (id) => {
     set({ isLoading: true, error: null })
     try {
-      const result = await window.api.connections.delete(id) as unknown
-      // Handle standardized IPC response
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; error?: string }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to delete connection')
-        }
-      }
+      const result = await window.api.connections.delete(id)
+      if (!result.success) throw new Error(result.error || 'Failed to delete connection')
       set((state) => ({
         connections: state.connections.filter((c) => c.id !== id),
         activeConnectionId: state.activeConnectionId === id ? null : state.activeConnectionId,
@@ -134,7 +101,8 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   },
 
   testConnection: async (connection) => {
-    return window.api.connections.test(connection)
+    const result = await window.api.connections.test(connection)
+    return result.success ? result.data : { success: false, error: result.error }
   },
 
   setActiveConnection: (id) => {
@@ -146,14 +114,8 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       connectionStatus: { ...state.connectionStatus, [id]: 'connecting' }
     }))
     try {
-      const result = await window.api.kafka.connect(id) as unknown
-      // Handle standardized IPC response
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; error?: string }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to connect')
-        }
-      }
+      const result = await window.api.kafka.connect(id)
+      if (!result.success) throw new Error(result.error || 'Failed to connect')
       set((state) => ({
         connectionStatus: { ...state.connectionStatus, [id]: 'connected' },
         activeConnectionId: id
@@ -169,14 +131,8 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 
   disconnectFromCluster: async (id) => {
     try {
-      const result = await window.api.kafka.disconnect(id) as unknown
-      // Handle standardized IPC response
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; error?: string }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to disconnect')
-        }
-      }
+      const result = await window.api.kafka.disconnect(id)
+      if (!result.success) throw new Error(result.error || 'Failed to disconnect')
       set((state) => ({
         connectionStatus: { ...state.connectionStatus, [id]: 'disconnected' },
         activeConnectionId: state.activeConnectionId === id ? null : state.activeConnectionId,
@@ -197,16 +153,9 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   loadClusterInfo: async (connectionId) => {
     set({ isLoadingClusterInfo: true })
     try {
-      const result = await window.api.kafka.getClusterInfo(connectionId) as unknown
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; data?: ClusterInfo; error?: string }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to load cluster info')
-        }
-        set({ clusterInfo: typedResult.data ?? null, isLoadingClusterInfo: false })
-      } else {
-        set({ clusterInfo: result as ClusterInfo, isLoadingClusterInfo: false })
-      }
+      const result = await window.api.kafka.getClusterInfo(connectionId)
+      if (!result.success) throw new Error(result.error || 'Failed to load cluster info')
+      set({ clusterInfo: result.data, isLoadingClusterInfo: false })
     } catch (error) {
       set({ isLoadingClusterInfo: false, error: error instanceof Error ? error.message : 'Failed to load cluster info' })
     }
@@ -215,16 +164,9 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   loadBrokerConfig: async (connectionId) => {
     set({ isLoadingBrokerConfig: true })
     try {
-      const result = await window.api.kafka.getBrokerConfig(connectionId) as unknown
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; data?: ConfigEntry[]; error?: string }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to load broker config')
-        }
-        set({ brokerConfig: typedResult.data ?? [], isLoadingBrokerConfig: false })
-      } else {
-        set({ brokerConfig: result as ConfigEntry[], isLoadingBrokerConfig: false })
-      }
+      const result = await window.api.kafka.getBrokerConfig(connectionId)
+      if (!result.success) throw new Error(result.error || 'Failed to load broker config')
+      set({ brokerConfig: result.data, isLoadingBrokerConfig: false })
     } catch (error) {
       set({ isLoadingBrokerConfig: false, error: error instanceof Error ? error.message : 'Failed to load broker config' })
     }

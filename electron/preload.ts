@@ -10,17 +10,6 @@ import type {
   DownloadProgress
 } from '../shared/types'
 
-// Re-export types for consumers of preload
-export type {
-  KafkaConnection,
-  TopicConfig,
-  MessageOptions,
-  ProduceMessage,
-  ResetOffsetOptions,
-  UpdateCheckResult,
-  DownloadProgress
-}
-
 const api = {
   // Connection operations
   connections: {
