@@ -7,7 +7,17 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            build_args: --mac --x64 --arm64
+          - os: windows-latest
+            build_args: --win
+          - os: ubuntu-latest
+            build_args: --linux
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,3 +36,10 @@ jobs:
 
       - name: Build
         run: npx vite build
+
+      # Same electron-builder invocation as release.yml, minus publishing,
+      # so packaging failures surface on the PR instead of on the tag.
+      - name: Package
+        run: npx electron-builder ${{ matrix.build_args }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false

@@ -90,7 +90,8 @@
     "shell-quote": "^1.9.0",
     "tmp": "^0.2.6",
     "undici": "^6.28.0",
-    "postcss": "^8.5.23"
+    "postcss": "^8.5.23",
+    "plist": "^3.1.1"
   },
   "build": {
     "appId": "com.topiq-explorer.app",
