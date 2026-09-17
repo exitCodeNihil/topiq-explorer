@@ -23,6 +23,8 @@ yarn install
 yarn dev
 ```
 
+Production builds inline a PostHog key for the anonymous usage heartbeat and fail without one. Contributors do not need it: run `TELEMETRY=off yarn build`.
+
 ## Branching Model
 
 | Branch | Purpose |

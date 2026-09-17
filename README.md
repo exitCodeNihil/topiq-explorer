@@ -111,14 +111,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, branching model, a
 
 Releases are automated via GitHub Actions. Version bumps are controlled by PR labels. See [RELEASING.md](RELEASING.md) for details.
 
-## Telemetry
-
-Topiq sends one anonymous heartbeat per install per day to [PostHog](https://posthog.com) (US cloud) so we know roughly how many people use it. It contains: a random install ID (a UUID generated on first run, not tied to your machine), app version, OS platform, architecture, OS version and locale. PostHog derives a country from the request IP address; the IP itself is not stored. Connections, credentials, topics and messages are never sent.
-
-To turn it off, open Settings (gear icon in the status bar) and untick "Send anonymous usage statistics". Deleting `topiq-explorer-settings.json` from the app data folder resets the install ID.
-
-Builds from source have telemetry off unless a PostHog key is supplied: `TELEMETRY=off yarn build` (no key) or `POSTHOG_KEY=phc_... yarn build`.
-
 ## License
 
 Apache-2.0 - see [LICENSE](LICENSE) for details.
