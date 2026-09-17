@@ -193,7 +193,6 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             <Check
               id="telemetry"
               label="Send anonymous usage statistics"
-              hint="The app sends an anonymous install ID, app version, OS and locale once a day, plus which features are used (counts only) to PostHog so we know how many people use Topiq and what matters to them. Your country is derived from your IP address, which is not stored. Broker addresses, credentials, topic names, keys and message contents are never sent."
               checked={settings.telemetryEnabled}
               onChange={(v) => update({ telemetryEnabled: v })}
             />
