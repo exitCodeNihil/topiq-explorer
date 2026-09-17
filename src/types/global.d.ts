@@ -14,6 +14,7 @@ import type {
   ResetOffsetOptions,
   UpdateCheckResult,
   DownloadProgress,
+  AppSettings,
   IpcResponse
 } from '../../shared/types'
 
@@ -49,6 +50,10 @@ declare global {
         deleteRecords: (connectionId: string, topic: string, partitionOffsets: { partition: number; offset: string }[]) => Promise<IpcResponse<void>>
         searchMessages: (connectionId: string, topic: string, options: SearchMessageOptions) => Promise<IpcResponse<SearchMessageResult>>
         cancelSearch: (connectionId: string, requestId: string) => Promise<IpcResponse<void>>
+      }
+      settings: {
+        get: () => Promise<IpcResponse<AppSettings>>
+        set: (patch: Partial<AppSettings>) => Promise<IpcResponse<AppSettings>>
       }
       updater: {
         checkForUpdates: () => Promise<UpdateCheckResult>

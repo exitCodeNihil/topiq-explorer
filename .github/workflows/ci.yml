@@ -43,6 +43,8 @@ jobs:
 
       - name: Build
         run: npx vite build
+        env:
+          TELEMETRY: off # PR builds never ship; the key is injected only in release.yml
 
       # Same electron-builder invocation as release.yml, minus publishing,
       # so packaging failures surface on the PR instead of on the tag.

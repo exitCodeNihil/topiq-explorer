@@ -7,7 +7,9 @@ import type {
   ResetOffsetOptions,
   SearchMessageOptions,
   UpdateCheckResult,
-  DownloadProgress
+  DownloadProgress,
+  AppSettings,
+  IpcResponse
 } from '../shared/types'
 
 const api = {
@@ -59,6 +61,12 @@ const api = {
       ipcRenderer.invoke('kafka:resetOffsets', connectionId, groupId, topic, options),
     deleteRecords: (connectionId: string, topic: string, partitionOffsets: { partition: number; offset: string }[]) =>
       ipcRenderer.invoke('kafka:deleteRecords', connectionId, topic, partitionOffsets)
+  },
+
+  // Settings operations
+  settings: {
+    get: (): Promise<IpcResponse<AppSettings>> => ipcRenderer.invoke('settings:get'),
+    set: (patch: Partial<AppSettings>): Promise<IpcResponse<AppSettings>> => ipcRenderer.invoke('settings:set', patch)
   },
 
   // Updater operations

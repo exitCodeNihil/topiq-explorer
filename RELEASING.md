@@ -69,3 +69,8 @@ git push origin main --follow-tags
 ## First Stable Release
 
 The workflow includes a one-time gate: any version starting with `0.x.x` will automatically bump to `1.0.0` regardless of PR labels. This ensures the first stable release is always `1.0.0`. After that, labels control the bump type normally.
+
+## Secrets
+
+- `RELEASE_PAT`: used by auto-release to push the version bump and tag.
+- `POSTHOG_KEY`: PostHog project key, injected into the main-process bundle at build time by `vite.config.ts`. The release build fails if it is missing. PR builds use `TELEMETRY=off` and never need it. The key is a public write-only key that ships inside the app; cap spend in PostHog (Billing → billing limit) rather than relying on secrecy.

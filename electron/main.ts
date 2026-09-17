@@ -4,6 +4,7 @@ import fs from 'fs'
 import { autoUpdater } from 'electron-updater'
 import { KafkaService } from './services/kafka.service'
 import { ConnectionStore } from './services/connection.store'
+import { getSettings, setSettings, sendHeartbeat } from './services/telemetry'
 
 // Configure autoUpdater
 autoUpdater.autoDownload = false
@@ -73,6 +74,9 @@ app.whenReady().then(() => {
       createWindow()
     }
   })
+
+  // Anonymous daily usage ping (logs instead of sending in dev mode)
+  setTimeout(() => { void sendHeartbeat('startup') }, 3000)
 
   // Auto-check for updates 3 seconds after app ready (skip in dev mode)
   if (!process.env.VITE_DEV_SERVER_URL) {
@@ -551,6 +555,29 @@ ipcMain.handle('kafka:deleteRecords', async (_, connectionId: string, topic: str
     }
     await kafkaService.deleteRecords(connectionId, topic, partitionOffsets)
     return ipcSuccess(undefined)
+  } catch (error) {
+    return ipcError(error)
+  }
+})
+
+// Settings IPC Handlers
+ipcMain.handle('settings:get', () => {
+  try {
+    return ipcSuccess(getSettings())
+  } catch (error) {
+    return ipcError(error)
+  }
+})
+
+ipcMain.handle('settings:set', (_, patch) => {
+  try {
+    if (patch == null || typeof patch !== 'object') throw new Error('Invalid settings')
+    for (const [key, value] of Object.entries(patch)) {
+      if (key !== 'telemetryEnabled' || typeof value !== 'boolean') {
+        throw new Error('Invalid settings')
+      }
+    }
+    return ipcSuccess(setSettings(patch))
   } catch (error) {
     return ipcError(error)
   }
