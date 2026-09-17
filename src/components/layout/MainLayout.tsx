@@ -8,11 +8,9 @@ import { ClusterDetails } from '../cluster/ClusterDetails'
 import { useConnectionStore } from '@/stores/connection.store'
 import { useTopicStore } from '@/stores/topic.store'
 import { useConsumerStore } from '@/stores/consumer.store'
-import { Terminal, Settings } from 'lucide-react'
+import { Terminal } from 'lucide-react'
 import { UpdateNotification } from '../updates/UpdateNotification'
 import { UpdateChecker } from '../updates/UpdateChecker'
-import { SettingsDialog } from '../settings/SettingsDialog'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 // macOS traffic lights sit over the title bar; other platforms have no inset
 const titleInset = window.api.platform === 'darwin' ? 'pl-16' : ''
@@ -40,7 +38,6 @@ function EmptyState({ message }: { message: string }) {
 
 export function MainLayout() {
   const [activeTab, setActiveTab] = useState('topics')
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const activeConnectionId = useConnectionStore((state) => state.activeConnectionId)
   const connectionStatus = useConnectionStore((state) => state.connectionStatus)
   const connections = useConnectionStore((state) => state.connections)
@@ -169,33 +166,13 @@ export function MainLayout() {
                 </>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              <UpdateChecker />
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label="Settings"
-                      onClick={() => setSettingsOpen(true)}
-                      className="-m-1 rounded p-1 text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar"
-                    >
-                      <Settings className="h-3.5 w-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <p className="text-xs">Settings</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
+            <UpdateChecker />
           </div>
         </div>
       </div>
 
       {/* Update Notification */}
       <UpdateNotification />
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   )
 }

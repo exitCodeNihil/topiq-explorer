@@ -4,6 +4,8 @@ import { useConnectionStore } from '@/stores/connection.store'
 import { useTopicStore } from '@/stores/topic.store'
 import { useConsumerStore } from '@/stores/consumer.store'
 import { ConnectionForm } from '../connections/ConnectionForm'
+import { SettingsDialog } from '../settings/SettingsDialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Dialog,
@@ -50,6 +52,7 @@ function getConnectionId(name: string): string {
 
 export function Sidebar() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [editingConnection, setEditingConnection] = useState<KafkaConnection | null>(null)
   const [deleteConnectionId, setDeleteConnectionId] = useState<string | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
@@ -266,7 +269,28 @@ export function Sidebar() {
         >
           <Plus className="h-5 w-5" />
         </button>
+
+        {/* Settings */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Settings"
+                onClick={() => setSettingsOpen(true)}
+                className="mt-2 flex h-10 w-10 items-center justify-center rounded-full text-text-secondary transition-all duration-200 hover:bg-bg-panel hover:text-text-primary active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar"
+              >
+                <Settings className="h-5 w-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p className="text-xs">Settings</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 
       {/* Connection Form Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) setEditingConnection(null) }}>
