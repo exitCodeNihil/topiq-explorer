@@ -27,3 +27,11 @@ yarn-error.log*
 
 # Docker certs (generated)
 docker/certs/
+
+# Tauri spike residue / tool dumps
+src-tauri/target/
+src-tauri/gen/
+.playwright-mcp/
+
+# Compiled shared types
+shared/*.js

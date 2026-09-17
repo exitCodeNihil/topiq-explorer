@@ -24,18 +24,16 @@ interface TopicState {
   topicConfig: ConfigEntry[]
   messages: KafkaMessage[]
   messageToRepublish: MessageToRepublish | null
-  isLoading: boolean // Kept for backward compatibility
   isLoadingTopics: boolean
   isLoadingMetadata: boolean
   isLoadingConfig: boolean
   isLoadingMessages: boolean
   error: string | null
   messageError: string | null
-  lastMessageOptions: MessageOptions | null
   hasMore: boolean
   nextOffset: string | null
   nextPartition: number | undefined
-  isLoadingMore: boolean
+  nextOffsets: Record<number, string> | undefined
 
   // Server-side search state
   isSearchActive: boolean
@@ -43,7 +41,6 @@ interface TopicState {
   searchQuery: string
   searchResults: KafkaMessage[]
   searchScanned: number
-  searchTotalMatches: number
   searchHasMore: boolean
   searchNextOffset: string | null
   searchNextPartition: number | undefined
@@ -58,10 +55,8 @@ interface TopicState {
   createTopic: (connectionId: string, config: TopicConfig) => Promise<void>
   deleteTopic: (connectionId: string, topic: string) => Promise<void>
   loadMessages: (connectionId: string, topic: string, options?: MessageOptions) => Promise<void>
-  loadMoreMessages: (connectionId: string, topic: string) => Promise<void>
   produceMessage: (connectionId: string, topic: string, message: ProduceMessage) => Promise<void>
   setMessageToRepublish: (message: MessageToRepublish | null) => void
-  clearMessages: () => void
   searchMessages: (connectionId: string, topic: string, query: string, partition?: number) => Promise<void>
   searchMoreMessages: (connectionId: string, topic: string) => Promise<void>
   clearSearch: () => void
@@ -69,37 +64,52 @@ interface TopicState {
   reset: () => void
 }
 
-export const useTopicStore = create<TopicState>((set) => ({
+const emptySearch = {
+  isSearchActive: false,
+  isSearching: false,
+  searchQuery: '',
+  searchResults: [] as KafkaMessage[],
+  searchScanned: 0,
+  searchHasMore: false,
+  searchNextOffset: null,
+  searchNextPartition: undefined,
+  searchRequestId: null,
+  searchError: null
+}
+
+const emptyMessages = {
+  messages: [] as KafkaMessage[],
+  hasMore: false,
+  nextOffset: null,
+  nextPartition: undefined,
+  nextOffsets: undefined,
+  messageError: null
+}
+
+async function fetchTopics(connectionId: string): Promise<string[]> {
+  const result = await window.api.kafka.getTopics(connectionId)
+  if (!result.success) throw new Error(result.error || 'Failed to load topics')
+  return [...result.data].sort()
+}
+
+function cancelActiveSearch(connectionId: string | null, requestId: string | null) {
+  if (!connectionId || !requestId) return
+  window.api.kafka.cancelSearch(connectionId, requestId).catch(() => {})
+}
+
+export const useTopicStore = create<TopicState>((set, get) => ({
   topics: [],
   selectedTopic: null,
   topicMetadata: null,
   topicConfig: [],
-  messages: [],
   messageToRepublish: null,
-  isLoading: false,
   isLoadingTopics: false,
   isLoadingMetadata: false,
   isLoadingConfig: false,
   isLoadingMessages: false,
   error: null,
-  messageError: null,
-  lastMessageOptions: null,
-  hasMore: false,
-  nextOffset: null,
-  nextPartition: undefined,
-  isLoadingMore: false,
-
-  isSearchActive: false,
-  isSearching: false,
-  searchQuery: '',
-  searchResults: [],
-  searchScanned: 0,
-  searchTotalMatches: 0,
-  searchHasMore: false,
-  searchNextOffset: null,
-  searchNextPartition: undefined,
-  searchRequestId: null,
-  searchError: null,
+  ...emptyMessages,
+  ...emptySearch,
 
   loadTopics: async (connectionId) => {
     // Deduplicate in-flight requests
@@ -108,23 +118,11 @@ export const useTopicStore = create<TopicState>((set) => ({
     if (existingRequest) return existingRequest
 
     const doLoad = async () => {
-      set({ isLoadingTopics: true, isLoading: true, error: null })
+      set({ isLoadingTopics: true, error: null })
       try {
-        const result = await window.api.kafka.getTopics(connectionId) as unknown
-        // Handle standardized IPC response
-        let topics: string[]
-        if (result && typeof result === 'object' && 'success' in result) {
-          const typedResult = result as { success: boolean; data?: string[]; error?: string }
-          if (!typedResult.success) {
-            throw new Error(typedResult.error || 'Failed to load topics')
-          }
-          topics = typedResult.data ?? []
-        } else {
-          topics = result as string[]
-        }
-        set({ topics: topics.sort(), isLoadingTopics: false, isLoading: false })
+        set({ topics: await fetchTopics(connectionId), isLoadingTopics: false })
       } catch (error) {
-        set({ error: error instanceof Error ? error.message : 'Failed to load topics', isLoadingTopics: false, isLoading: false })
+        set({ error: error instanceof Error ? error.message : 'Failed to load topics', isLoadingTopics: false })
       } finally {
         inFlightRequests.delete(requestKey)
       }
@@ -136,28 +134,17 @@ export const useTopicStore = create<TopicState>((set) => ({
   },
 
   selectTopic: (topic) => {
-    set({
-      selectedTopic: topic, topicMetadata: null, topicConfig: [], messages: [], hasMore: false, nextOffset: null, nextPartition: undefined, messageError: null,
-      isSearchActive: false, isSearching: false, searchQuery: '', searchResults: [], searchScanned: 0, searchTotalMatches: 0, searchHasMore: false, searchNextOffset: null, searchNextPartition: undefined, searchRequestId: null, searchError: null
-    })
+    cancelActiveSearch(useConnectionStore.getState().activeConnectionId, get().searchRequestId)
+    set({ selectedTopic: topic, topicMetadata: null, topicConfig: [], ...emptyMessages, ...emptySearch })
   },
 
   loadTopicMetadata: async (connectionId, topic) => {
     set({ isLoadingMetadata: true, error: null })
     try {
-      const result = await window.api.kafka.getTopicMetadata(connectionId, topic) as unknown
-      // Handle standardized IPC response
-      let metadata: TopicMetadata
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; data?: TopicMetadata; error?: string }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to load topic metadata')
-        }
-        metadata = typedResult.data!
-      } else {
-        metadata = result as TopicMetadata
-      }
-      set({ topicMetadata: metadata, isLoadingMetadata: false })
+      const result = await window.api.kafka.getTopicMetadata(connectionId, topic)
+      if (get().selectedTopic !== topic) return
+      if (!result.success) throw new Error(result.error || 'Failed to load topic metadata')
+      set({ topicMetadata: result.data, isLoadingMetadata: false })
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to load topic metadata', isLoadingMetadata: false })
     }
@@ -166,110 +153,68 @@ export const useTopicStore = create<TopicState>((set) => ({
   loadTopicConfig: async (connectionId, topic) => {
     set({ isLoadingConfig: true, error: null })
     try {
-      const result = await window.api.kafka.getTopicConfig(connectionId, topic) as unknown
-      // Handle standardized IPC response
-      let config: ConfigEntry[]
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; data?: ConfigEntry[]; error?: string }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to load topic config')
-        }
-        config = typedResult.data ?? []
-      } else {
-        config = result as ConfigEntry[]
-      }
-      set({ topicConfig: config, isLoadingConfig: false })
+      const result = await window.api.kafka.getTopicConfig(connectionId, topic)
+      if (get().selectedTopic !== topic) return
+      if (!result.success) throw new Error(result.error || 'Failed to load topic config')
+      set({ topicConfig: result.data, isLoadingConfig: false })
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to load topic config', isLoadingConfig: false })
     }
   },
 
   createTopic: async (connectionId, config) => {
-    set({ isLoadingTopics: true, isLoading: true, error: null })
+    set({ isLoadingTopics: true, error: null })
     try {
-      const createResult = await window.api.kafka.createTopic(connectionId, config) as unknown
-      // Handle standardized IPC response
-      if (createResult && typeof createResult === 'object' && 'success' in createResult) {
-        const typedResult = createResult as { success: boolean; error?: string }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to create topic')
-        }
-      }
-      const topicsResult = await window.api.kafka.getTopics(connectionId) as unknown
-      let topics: string[]
-      if (topicsResult && typeof topicsResult === 'object' && 'success' in topicsResult) {
-        const typedResult = topicsResult as { success: boolean; data?: string[]; error?: string }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to load topics')
-        }
-        topics = typedResult.data ?? []
-      } else {
-        topics = topicsResult as string[]
-      }
-      set({ topics: topics.sort(), isLoadingTopics: false, isLoading: false })
+      const result = await window.api.kafka.createTopic(connectionId, config)
+      if (!result.success) throw new Error(result.error || 'Failed to create topic')
+      set({ topics: await fetchTopics(connectionId), isLoadingTopics: false })
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to create topic', isLoadingTopics: false, isLoading: false })
+      set({ error: error instanceof Error ? error.message : 'Failed to create topic', isLoadingTopics: false })
       throw error
     }
   },
 
   deleteTopic: async (connectionId, topic) => {
-    set({ isLoadingTopics: true, isLoading: true, error: null })
+    set({ isLoadingTopics: true, error: null })
     try {
-      const result = await window.api.kafka.deleteTopic(connectionId, topic) as unknown
-      // Handle standardized IPC response
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; error?: string }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to delete topic')
-        }
-      }
+      const result = await window.api.kafka.deleteTopic(connectionId, topic)
+      if (!result.success) throw new Error(result.error || 'Failed to delete topic')
       set((state) => ({
         topics: state.topics.filter((t) => t !== topic),
         selectedTopic: state.selectedTopic === topic ? null : state.selectedTopic,
-        isLoadingTopics: false,
-        isLoading: false
+        isLoadingTopics: false
       }))
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to delete topic', isLoadingTopics: false, isLoading: false })
+      set({ error: error instanceof Error ? error.message : 'Failed to delete topic', isLoadingTopics: false })
       throw error
     }
   },
 
   loadMessages: async (connectionId, topic, options) => {
-    // Deduplicate in-flight requests
-    const requestKey = `loadMessages:${connectionId}:${topic}`
+    // Deduplicate identical in-flight requests
+    const requestKey = `loadMessages:${connectionId}:${topic}:${JSON.stringify(options ?? {})}`
     const existingRequest = inFlightRequests.get(requestKey)
     if (existingRequest) return existingRequest
 
     const doLoad = async () => {
       // Track this request to prevent stale data from race conditions
       const currentRequestId = ++messageRequestId
-      set({ isLoadingMessages: true, error: null, messageError: null, lastMessageOptions: options ?? null, hasMore: false, nextOffset: null, nextPartition: undefined })
+      set({ isLoadingMessages: true, error: null, ...emptyMessages, messages: get().messages })
       try {
-        const result = await window.api.kafka.getMessages(connectionId, topic, options) as unknown
+        const result = await window.api.kafka.getMessages(connectionId, topic, options)
         // Discard stale response if a newer request was made
         if (currentRequestId !== messageRequestId) return
-        // Handle structured response format from IPC handler
-        if (result && typeof result === 'object' && 'success' in result) {
-          const typedResult = result as { success: boolean; error?: string; data?: { messages: KafkaMessage[]; hasMore?: boolean; nextOffset?: string | null; nextPartition?: number } }
-          if (!typedResult.success) {
-            throw new Error(typedResult.error || 'Failed to load messages')
-          }
-          const data = typedResult.data
-          const messages = data?.messages ?? []
-          set({ messages, isLoadingMessages: false, hasMore: data?.hasMore ?? false, nextOffset: data?.nextOffset ?? null, nextPartition: data?.nextPartition })
-        } else if (Array.isArray(result)) {
-          // Legacy format: direct array
-          set({ messages: result as KafkaMessage[], isLoadingMessages: false, hasMore: false, nextOffset: null, nextPartition: undefined })
-        } else {
-          // Fallback for other formats
-          const typedResult = result as { messages?: KafkaMessage[]; hasMore?: boolean; nextOffset?: string | null; nextPartition?: number }
-          const messages = typedResult?.messages ?? []
-          set({ messages, isLoadingMessages: false, hasMore: typedResult?.hasMore ?? false, nextOffset: typedResult?.nextOffset ?? null, nextPartition: typedResult?.nextPartition })
-        }
+        if (!result.success) throw new Error(result.error || 'Failed to load messages')
+        const data = result.data
+        set({
+          messages: data.messages,
+          isLoadingMessages: false,
+          hasMore: data.hasMore,
+          nextOffset: data.nextOffset,
+          nextPartition: data.nextPartition,
+          nextOffsets: data.nextOffsets
+        })
       } catch (error) {
-        // Discard stale error if a newer request was made
         if (currentRequestId !== messageRequestId) return
         const errorMsg = error instanceof Error ? error.message : 'Failed to load messages'
         set({ error: errorMsg, messageError: errorMsg, isLoadingMessages: false })
@@ -283,65 +228,13 @@ export const useTopicStore = create<TopicState>((set) => ({
     return promise
   },
 
-  loadMoreMessages: async (connectionId, topic) => {
-    const state = useTopicStore.getState()
-    if (!state.hasMore || !state.nextOffset || state.isLoadingMore) return
-
-    set({ isLoadingMore: true })
-    try {
-      const options: MessageOptions = {
-        ...state.lastMessageOptions,
-        fromOffset: state.nextOffset,
-        partition: state.nextPartition
-      }
-      const result = await window.api.kafka.getMessages(connectionId, topic, options) as unknown
-
-      let newMessages: KafkaMessage[] = []
-      let hasMore = false
-      let nextOffset: string | null = null
-      let nextPartition: number | undefined
-
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; error?: string; data?: { messages: KafkaMessage[]; hasMore?: boolean; nextOffset?: string | null; nextPartition?: number } }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to load more messages')
-        }
-        const data = typedResult.data
-        newMessages = data?.messages ?? []
-        hasMore = data?.hasMore ?? false
-        nextOffset = data?.nextOffset ?? null
-        nextPartition = data?.nextPartition
-      } else if (Array.isArray(result)) {
-        newMessages = result as KafkaMessage[]
-      } else {
-        const typedResult = result as { messages?: KafkaMessage[]; hasMore?: boolean; nextOffset?: string | null; nextPartition?: number }
-        newMessages = typedResult?.messages ?? []
-        hasMore = typedResult?.hasMore ?? false
-        nextOffset = typedResult?.nextOffset ?? null
-        nextPartition = typedResult?.nextPartition
-      }
-
-      set({ messages: [...state.messages, ...newMessages], hasMore, nextOffset, nextPartition, isLoadingMore: false })
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to load more messages'
-      set({ messageError: errorMsg, isLoadingMore: false })
-    }
-  },
-
   produceMessage: async (connectionId, topic, message) => {
-    set({ isLoading: true, error: null })
+    set({ error: null })
     try {
-      const result = await window.api.kafka.produceMessage(connectionId, topic, message) as unknown
-      // Handle standardized IPC response
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; error?: string }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Failed to produce message')
-        }
-      }
-      set({ isLoading: false })
+      const result = await window.api.kafka.produceMessage(connectionId, topic, message)
+      if (!result.success) throw new Error(result.error || 'Failed to produce message')
     } catch (error) {
-      set({ error: error instanceof Error ? error.message : 'Failed to produce message', isLoading: false })
+      set({ error: error instanceof Error ? error.message : 'Failed to produce message' })
       throw error
     }
   },
@@ -351,72 +244,35 @@ export const useTopicStore = create<TopicState>((set) => ({
   },
 
   searchMessages: async (connectionId, topic, query, partition?) => {
-    // Cancel any active search
-    const state = useTopicStore.getState()
-    if (state.searchRequestId) {
-      try {
-        const result = await window.api.kafka.cancelSearch(connectionId, state.searchRequestId) as unknown
-        if (result && typeof result === 'object' && 'success' in result) {
-          // ignore cancel result
-        }
-      } catch {
-        // Ignore cancel errors
-      }
-    }
+    cancelActiveSearch(connectionId, get().searchRequestId)
 
     const currentRequestId = `search-${++searchRequestCounter}`
-    set({
-      isSearchActive: true,
-      isSearching: true,
-      searchQuery: query,
-      searchResults: [],
-      searchScanned: 0,
-      searchTotalMatches: 0,
-      searchHasMore: false,
-      searchNextOffset: null,
-      searchNextPartition: undefined,
-      searchRequestId: currentRequestId,
-      searchError: null
-    })
+    set({ ...emptySearch, isSearchActive: true, isSearching: true, searchQuery: query, searchRequestId: currentRequestId })
 
     try {
-      const options: SearchMessageOptions = {
-        query,
-        partition,
-        requestId: currentRequestId
-      }
-      const result = await window.api.kafka.searchMessages(connectionId, topic, options) as unknown
+      const options: SearchMessageOptions = { query, partition, requestId: currentRequestId }
+      const result = await window.api.kafka.searchMessages(connectionId, topic, options)
 
       // Stale-response detection
-      if (useTopicStore.getState().searchRequestId !== currentRequestId) return
-
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; error?: string; data?: { matches: KafkaMessage[]; scanned: number; totalMatches: number; hasMore: boolean; nextOffset: string | null; nextPartition?: number; cancelled: boolean } }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Search failed')
-        }
-        const data = typedResult.data!
-        set({
-          searchResults: data.matches,
-          searchScanned: data.scanned,
-          searchTotalMatches: data.totalMatches,
-          searchHasMore: data.hasMore,
-          searchNextOffset: data.nextOffset,
-          searchNextPartition: data.nextPartition,
-          isSearching: false
-        })
-      }
-    } catch (error) {
-      if (useTopicStore.getState().searchRequestId !== currentRequestId) return
+      if (get().searchRequestId !== currentRequestId) return
+      if (!result.success) throw new Error(result.error || 'Search failed')
+      const data = result.data
       set({
-        searchError: error instanceof Error ? error.message : 'Search failed',
+        searchResults: data.matches,
+        searchScanned: data.scanned,
+        searchHasMore: data.hasMore,
+        searchNextOffset: data.nextOffset,
+        searchNextPartition: data.nextPartition,
         isSearching: false
       })
+    } catch (error) {
+      if (get().searchRequestId !== currentRequestId) return
+      set({ searchError: error instanceof Error ? error.message : 'Search failed', isSearching: false })
     }
   },
 
   searchMoreMessages: async (connectionId, topic) => {
-    const state = useTopicStore.getState()
+    const state = get()
     if (!state.searchHasMore || !state.searchNextOffset || state.isSearching) return
 
     const currentRequestId = `search-${++searchRequestCounter}`
@@ -430,73 +286,36 @@ export const useTopicStore = create<TopicState>((set) => ({
         fromPartition: state.searchNextPartition,
         requestId: currentRequestId
       }
-      const result = await window.api.kafka.searchMessages(connectionId, topic, options) as unknown
+      const result = await window.api.kafka.searchMessages(connectionId, topic, options)
 
-      if (useTopicStore.getState().searchRequestId !== currentRequestId) return
-
-      if (result && typeof result === 'object' && 'success' in result) {
-        const typedResult = result as { success: boolean; error?: string; data?: { matches: KafkaMessage[]; scanned: number; totalMatches: number; hasMore: boolean; nextOffset: string | null; nextPartition?: number; cancelled: boolean } }
-        if (!typedResult.success) {
-          throw new Error(typedResult.error || 'Search failed')
-        }
-        const data = typedResult.data!
-        let combined = [...state.searchResults, ...data.matches]
+      if (get().searchRequestId !== currentRequestId) return
+      if (!result.success) throw new Error(result.error || 'Search failed')
+      const data = result.data
+      set((s) => {
         // Cap search results to prevent unbounded memory growth
-        if (combined.length > MAX_SEARCH_RESULTS) {
-          combined = combined.slice(combined.length - MAX_SEARCH_RESULTS)
-        }
-        set({
+        const combined = [...s.searchResults, ...data.matches].slice(-MAX_SEARCH_RESULTS)
+        return {
           searchResults: combined,
-          searchScanned: state.searchScanned + data.scanned,
-          searchTotalMatches: combined.length,
+          searchScanned: s.searchScanned + data.scanned,
           searchHasMore: data.hasMore,
           searchNextOffset: data.nextOffset,
           searchNextPartition: data.nextPartition,
           isSearching: false
-        })
-      }
-    } catch (error) {
-      if (useTopicStore.getState().searchRequestId !== currentRequestId) return
-      set({
-        searchError: error instanceof Error ? error.message : 'Search failed',
-        isSearching: false
+        }
       })
+    } catch (error) {
+      if (get().searchRequestId !== currentRequestId) return
+      set({ searchError: error instanceof Error ? error.message : 'Search failed', isSearching: false })
     }
   },
 
   clearSearch: () => {
-    set({
-      isSearchActive: false,
-      isSearching: false,
-      searchQuery: '',
-      searchResults: [],
-      searchScanned: 0,
-      searchTotalMatches: 0,
-      searchHasMore: false,
-      searchNextOffset: null,
-      searchNextPartition: undefined,
-      searchRequestId: null,
-      searchError: null
-    })
+    set({ ...emptySearch })
   },
 
   cancelSearch: async (connectionId) => {
-    const state = useTopicStore.getState()
-    if (state.searchRequestId) {
-      try {
-        const result = await window.api.kafka.cancelSearch(connectionId, state.searchRequestId) as unknown
-        if (result && typeof result === 'object' && 'success' in result) {
-          // ignore
-        }
-      } catch {
-        // Ignore cancel errors
-      }
-    }
+    cancelActiveSearch(connectionId, get().searchRequestId)
     set({ isSearching: false })
-  },
-
-  clearMessages: () => {
-    set({ messages: [] })
   },
 
   reset: () => {
@@ -505,31 +324,14 @@ export const useTopicStore = create<TopicState>((set) => ({
       selectedTopic: null,
       topicMetadata: null,
       topicConfig: [],
-      messages: [],
       messageToRepublish: null,
-      isLoading: false,
       isLoadingTopics: false,
       isLoadingMetadata: false,
       isLoadingConfig: false,
       isLoadingMessages: false,
       error: null,
-      messageError: null,
-      lastMessageOptions: null,
-      hasMore: false,
-      nextOffset: null,
-      nextPartition: undefined,
-      isLoadingMore: false,
-      isSearchActive: false,
-      isSearching: false,
-      searchQuery: '',
-      searchResults: [],
-      searchScanned: 0,
-      searchTotalMatches: 0,
-      searchHasMore: false,
-      searchNextOffset: null,
-      searchNextPartition: undefined,
-      searchRequestId: null,
-      searchError: null
+      ...emptyMessages,
+      ...emptySearch
     })
   }
 }))

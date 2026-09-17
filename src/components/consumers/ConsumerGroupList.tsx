@@ -85,7 +85,7 @@ export function ConsumerGroupList() {
             className="pl-9 h-9 bg-bg-main border-border-mute font-mono text-sm"
           />
         </div>
-        <Button variant="ghost" size="icon" className="h-9 w-9 text-text-secondary" onClick={handleRefresh} disabled={isLoading}>
+        <Button variant="ghost" size="icon" className="h-9 w-9 text-text-secondary" onClick={handleRefresh} disabled={isLoading} aria-label="Refresh consumer groups">
           <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
         </Button>
       </div>
@@ -115,7 +115,10 @@ export function ConsumerGroupList() {
                       ? 'bg-bg-main border-l-2 border-l-accent-active pl-[18px] pr-5 py-4'
                       : 'hover:bg-bg-main/50 px-5 py-4'
                   }`}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleSelectGroup(group.groupId)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSelectGroup(group.groupId) }}
                 >
                   <div className="flex-1 min-w-0">
                     <span className="truncate text-sm font-mono text-text-primary block">{group.groupId}</span>
@@ -128,7 +131,8 @@ export function ConsumerGroupList() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        aria-label={`Actions for ${group.groupId}`}
                       >
                         <Trash2 className="h-3 w-3 text-text-secondary" />
                       </Button>

@@ -5,7 +5,7 @@ import { useConnectionStore } from '@/stores/connection.store'
 import { MessageFilters } from './MessageFilters'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { formatJson, formatTimestamp, tryParseJson } from '@/lib/utils'
+import { formatTimestamp, tryParseJson } from '@/lib/utils'
 import { RefreshCw, Copy, ChevronDown, ChevronRight, ChevronLeft, MessageSquare, Trash2, RotateCcw, Loader2, Search, X, AlertCircle } from 'lucide-react'
 import { HighlightText } from './HighlightText'
 import { Input } from '@/components/ui/input'
@@ -33,7 +33,6 @@ interface ParsedMessage extends KafkaMessage {
   _parsed?: { value: unknown; isJson: boolean }
   messageId: string
   stringifiedPreview: string
-  _searchText: string
 }
 
 /** Lazily parse JSON — result is cached on the message object */
@@ -62,13 +61,13 @@ const MessageRow = memo(function MessageRow({ message, isExpanded, searchQuery, 
         className="flex items-start gap-2 p-3 cursor-pointer hover:bg-accent/50 transition-colors"
         onClick={() => onToggle(message.messageId)}
       >
-        <button className="mt-1 text-muted-foreground">
+        <span className="mt-1 text-muted-foreground" aria-hidden="true">
           {isExpanded ? (
             <ChevronDown className="h-4 w-4" />
           ) : (
             <ChevronRight className="h-4 w-4" />
           )}
-        </button>
+        </span>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -96,7 +95,8 @@ const MessageRow = memo(function MessageRow({ message, isExpanded, searchQuery, 
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 opacity-0 group-hover:opacity-100"
+          className="h-8 w-8 opacity-0 group-hover:opacity-100 focus:opacity-100"
+          aria-label="Copy message"
           onClick={(e) => {
             e.stopPropagation()
             onCopy(message)
@@ -107,14 +107,14 @@ const MessageRow = memo(function MessageRow({ message, isExpanded, searchQuery, 
       </div>
 
       {isExpanded && (() => {
-        const { isJson } = getParsed(message)
+        const { value: parsedValue, isJson } = getParsed(message)
         return (
         <div className="border-t border-border bg-muted/30 p-4">
           <div className="space-y-4">
             <div>
               <h4 className="text-xs font-medium text-muted-foreground mb-1">Value</h4>
               <pre className="json-viewer overflow-auto rounded-md bg-background p-3 text-sm">
-                <HighlightText text={isJson ? formatJson(message.value || '') : message.value || '(empty)'} query={searchQuery} />
+                <HighlightText text={isJson ? JSON.stringify(parsedValue, null, 2) : message.value || '(empty)'} query={searchQuery} />
               </pre>
             </div>
 
@@ -127,7 +127,7 @@ const MessageRow = memo(function MessageRow({ message, isExpanded, searchQuery, 
               </div>
             )}
 
-            {Object.keys(message.headers).length > 0 && (
+            {Object.keys(message.headers ?? {}).length > 0 && (
               <div>
                 <h4 className="text-xs font-medium text-muted-foreground mb-1">Headers</h4>
                 <pre className="json-viewer overflow-auto rounded-md bg-background p-3 text-sm">
@@ -203,7 +203,7 @@ export function MessageViewer() {
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
-  const [pageOffsetCache, setPageOffsetCache] = useState<Map<number, { offset: string; partition?: number }>>(new Map())
+  const [pageOffsetCache, setPageOffsetCache] = useState<Map<number, MessageOptions>>(new Map())
   const [searchPage, setSearchPage] = useState(1)
   const [pageInput, setPageInput] = useState('1')
   const [searchPageInput, setSearchPageInput] = useState('1')
@@ -221,7 +221,6 @@ export function MessageViewer() {
   const produceMessage = useTopicStore((state) => state.produceMessage)
   const setMessageToRepublish = useTopicStore((state) => state.setMessageToRepublish)
   const messageError = useTopicStore((state) => state.messageError)
-  const isLoadingMore = useTopicStore((state) => state.isLoadingMore)
   const topicMetadata = useTopicStore((state) => state.topicMetadata)
   const activeConnectionId = useConnectionStore((state) => state.activeConnectionId)
 
@@ -257,26 +256,25 @@ export function MessageViewer() {
     setCurrentPage(1)
     setPageOffsetCache(new Map())
     setSearchPage(1)
+    setExpandedMessages(new Set())
   }, [selectedTopic, filters, searchQuery])
 
   // Sync page inputs with current page values
   useEffect(() => { setPageInput(String(currentPage)) }, [currentPage])
   useEffect(() => { setSearchPageInput(String(searchPage)) }, [searchPage])
 
-  // Derive active search query for highlighting (covers both client-side and server-side search)
-  const activeSearchQuery = searchQuery.trim()
+  // Debounced query drives highlighting so large expanded rows don't re-split on every keystroke
+  const activeSearchQuery = debouncedSearchQuery.trim()
 
   // Build lightweight message wrappers — defer JSON parsing to expansion time
   const parsedMessages = useMemo<ParsedMessage[]>(() => {
     return messages.map((message) => {
       const raw = message.value || ''
       const preview = raw.substring(0, 100) + (raw.length > 100 ? '...' : '')
-      const headerEntries = Object.entries(message.headers ?? {}).flatMap(([k, v]) => [k, String(v)])
       return {
         ...message,
         messageId: `${message.partition}-${message.offset}`,
-        stringifiedPreview: preview,
-        _searchText: [raw, message.key || '', ...headerEntries].join('\0').toLowerCase()
+        stringifiedPreview: preview
       }
     })
   }, [messages])
@@ -284,7 +282,10 @@ export function MessageViewer() {
   const filteredMessages = useMemo(() => {
     if (!debouncedSearchQuery.trim()) return parsedMessages
     const query = debouncedSearchQuery.toLowerCase()
-    return parsedMessages.filter((message) => message._searchText.includes(query))
+    const has = (s: string | null | undefined) => !!s && s.toLowerCase().includes(query)
+    return parsedMessages.filter((m) =>
+      has(m.value) || has(m.key) || Object.entries(m.headers ?? {}).some(([k, v]) => has(k) || has(v))
+    )
   }, [parsedMessages, debouncedSearchQuery])
 
   // Build lightweight search result wrappers — defer JSON parsing to expansion
@@ -295,8 +296,7 @@ export function MessageViewer() {
       return {
         ...message,
         messageId: `${message.partition}-${message.offset}`,
-        stringifiedPreview: preview,
-        _searchText: '' // Not used for server-side search results
+        stringifiedPreview: preview
       }
     })
   }, [searchResults])
@@ -308,7 +308,7 @@ export function MessageViewer() {
     const parts = filters.partition !== undefined
       ? topicMetadata.partitions.filter(p => p.partition === filters.partition)
       : topicMetadata.partitions
-    return parts.reduce((sum, p) => sum + (parseInt(p.high) - parseInt(p.low)), 0)
+    return parts.reduce((sum, p) => sum + Number(BigInt(p.high) - BigInt(p.low)), 0)
   }, [topicMetadata, filters.partition])
 
   const totalPages = useMemo(() => {
@@ -346,34 +346,27 @@ export function MessageViewer() {
     } else {
       const cached = pageOffsetCache.get(page)
       if (cached) {
-        await loadMessages(activeConnectionId, selectedTopic, { ...filters, fromOffset: cached.offset, partition: cached.partition })
+        await loadMessages(activeConnectionId, selectedTopic, { ...filters, ...cached })
       } else if (topicMetadata) {
         const parts = filters.partition !== undefined
           ? topicMetadata.partitions.filter(p => p.partition === filters.partition)
           : topicMetadata.partitions
         if (parts.length === 0) return
 
-        const skip = (page - 1) * pageSize
-        if (parts.length === 1) {
-          const fromOffset = String(parseInt(parts[0].low) + skip)
-          await loadMessages(activeConnectionId, selectedTopic, { ...filters, fromOffset })
-        } else {
-          const minLow = Math.min(...parts.map(p => parseInt(p.low)))
-          const perPartitionSkip = Math.floor(skip / parts.length)
-          const fromOffset = String(minLow + perPartitionSkip)
-          await loadMessages(activeConnectionId, selectedTopic, { ...filters, fromOffset })
-        }
+        // ponytail: uncached jump approximates an even spread across partitions; exact only for sequential paging
+        const skip = BigInt((page - 1) * pageSize) / BigInt(parts.length)
+        const fromOffsets = Object.fromEntries(parts.map(p => [p.partition, String(BigInt(p.low) + skip)]))
+        await loadMessages(activeConnectionId, selectedTopic, { ...filters, fromOffsets })
       }
     }
 
-    // Cache nextOffset for sequential forward navigation
+    // Cache per-partition cursors for sequential forward navigation
     const state = useTopicStore.getState()
-    if (state.nextOffset) {
-      setPageOffsetCache(prev => {
-        const next = new Map(prev)
-        next.set(page + 1, { offset: state.nextOffset!, partition: state.nextPartition })
-        return next
-      })
+    const cursor: MessageOptions | null = state.nextOffsets
+      ? { fromOffsets: state.nextOffsets }
+      : state.nextOffset ? { fromOffset: state.nextOffset, partition: state.nextPartition } : null
+    if (cursor) {
+      setPageOffsetCache(prev => new Map(prev).set(page + 1, cursor))
     }
   }, [activeConnectionId, selectedTopic, totalPages, currentPage, pageOffsetCache, filters, topicMetadata, pageSize, loadMessages])
 
@@ -434,8 +427,12 @@ export function MessageViewer() {
       null,
       2
     )
-    await navigator.clipboard.writeText(content)
-    toast({ title: 'Copied', description: 'Message copied to clipboard' })
+    try {
+      await navigator.clipboard.writeText(content)
+      toast({ title: 'Copied', description: 'Message copied to clipboard' })
+    } catch {
+      toast({ title: 'Copy failed', description: 'Clipboard access was denied', variant: 'destructive' })
+    }
   }, [])
 
   const handleTombstone = useCallback(async () => {
@@ -479,6 +476,18 @@ export function MessageViewer() {
     toast({ title: 'Message Ready', description: 'Open the message producer to republish' })
   }, [setMessageToRepublish])
 
+  const renderRow = useCallback((_: number, message: ParsedMessage) => (
+    <MessageRow
+      message={message}
+      isExpanded={expandedMessages.has(message.messageId)}
+      searchQuery={activeSearchQuery}
+      onToggle={toggleExpanded}
+      onCopy={copyToClipboard}
+      onRepublish={handleRepublish}
+      onTombstone={setTombstoneMessage}
+    />
+  ), [expandedMessages, activeSearchQuery, toggleExpanded, copyToClipboard, handleRepublish])
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-3 pb-4">
@@ -497,6 +506,7 @@ export function MessageViewer() {
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
               <X className="h-4 w-4" />
@@ -582,20 +592,7 @@ export function MessageViewer() {
               Scanning for more matches...
             </div>
           )}
-          <Virtuoso
-            data={displayMessages}
-            itemContent={(_, message) => (
-              <MessageRow
-                message={message}
-                isExpanded={expandedMessages.has(message.messageId)}
-                searchQuery={activeSearchQuery}
-                onToggle={toggleExpanded}
-                onCopy={copyToClipboard}
-                onRepublish={handleRepublish}
-                onTombstone={setTombstoneMessage}
-              />
-            )}
-          />
+          <Virtuoso data={displayMessages} itemContent={renderRow} />
           </>
         )}
       </div>
@@ -671,7 +668,7 @@ export function MessageViewer() {
                 size="icon"
                 className="h-7 w-7"
                 onClick={handlePrevPage}
-                disabled={currentPage <= 1 || isLoadingMessages || isLoadingMore}
+                disabled={currentPage <= 1 || isLoadingMessages}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -694,17 +691,17 @@ export function MessageViewer() {
                   }}
                   onBlur={() => setPageInput(String(currentPage))}
                   className="w-12 text-center bg-transparent border border-transparent focus:border-border focus:outline-none rounded px-1"
-                  disabled={isLoadingMessages || isLoadingMore}
+                  disabled={isLoadingMessages}
                 />
                 of {totalPages}
-                {(isLoadingMessages || isLoadingMore) && <Loader2 className="ml-1 inline h-3 w-3 animate-spin" />}
+                {isLoadingMessages && <Loader2 className="ml-1 inline h-3 w-3 animate-spin" />}
               </span>
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
                 onClick={handleNextPage}
-                disabled={currentPage >= totalPages || isLoadingMessages || isLoadingMore}
+                disabled={currentPage >= totalPages || isLoadingMessages}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>

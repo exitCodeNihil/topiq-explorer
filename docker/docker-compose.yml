@@ -66,7 +66,8 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf"
     healthcheck:
-      test: kafka-broker-api-versions --bootstrap-server localhost:9093 --command-config /etc/kafka/client.properties || exit 1
+      # No plaintext listener and no client config in the image: check the SASL port is open.
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/9093"]
       interval: 10s
       timeout: 10s
       retries: 5
@@ -78,12 +79,12 @@ services:
     hostname: kafka-sasl-scram
     container_name: topiq-explorer-sasl-scram
     depends_on:
-      zookeeper:
-        condition: service_healthy
+      kafka-scram-init:
+        condition: service_completed_successfully
     ports:
       - "9094:9094"
     volumes:
-      - ./scripts/create-scram-users.sh:/docker-entrypoint-initdb.d/create-scram-users.sh
+      - ./config/kafka_server_jaas_scram.conf:/etc/kafka/kafka_server_jaas_scram.conf
     environment:
       KAFKA_BROKER_ID: 3
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -95,13 +96,9 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_OPTS: "-Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas_scram.conf"
-      # SCRAM credentials for inter-broker communication
-      KAFKA_LISTENER_NAME_SASL__PLAINTEXT_SCRAM__SHA__256_SASL_JAAS_CONFIG: |
-        org.apache.kafka.common.security.scram.ScramLoginModule required
-        username="admin"
-        password="admin-secret";
     healthcheck:
-      test: kafka-broker-api-versions --bootstrap-server localhost:9094 --command-config /etc/kafka/client-scram.properties || exit 1
+      # No plaintext listener and no client config in the image: check the SASL port is open.
+      test: ["CMD", "bash", "-c", "</dev/tcp/localhost/9094"]
       interval: 10s
       timeout: 10s
       retries: 5
@@ -140,21 +137,17 @@ services:
       retries: 5
       start_period: 45s
 
-  # Init container to create SCRAM users
+  # Creates SCRAM users (admin, client) in Zookeeper before the SCRAM broker starts,
+  # so inter-broker SCRAM auth works from the first boot.
   kafka-scram-init:
     image: confluentinc/cp-kafka:7.5.0
     container_name: topiq-explorer-scram-init
     depends_on:
-      kafka-sasl-scram:
-        condition: service_started
-    entrypoint: ["/bin/bash", "-c"]
-    command:
-      - |
-        echo "Waiting for Kafka SCRAM broker to be ready..."
-        sleep 30
-        echo "Creating SCRAM users..."
-        kafka-configs --zookeeper zookeeper:2181 --alter --add-config 'SCRAM-SHA-256=[iterations=8192,password=admin-secret]' --entity-type users --entity-name admin
-        echo "SCRAM users created successfully!"
+      zookeeper:
+        condition: service_healthy
+    volumes:
+      - ./scripts/create-scram-users.sh:/create-scram-users.sh:ro
+    entrypoint: ["/bin/bash", "/create-scram-users.sh"]
     restart: "no"
 
 networks:

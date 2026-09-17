@@ -1,131 +1,68 @@
-interface TLSConfig {
-  ca?: string
-  cert?: string
-  key?: string
-  passphrase?: string
-  rejectUnauthorized?: boolean
-}
+import type {
+  KafkaConnection,
+  TopicConfig,
+  TopicMetadata,
+  ConfigEntry,
+  ClusterInfo,
+  MessageOptions,
+  MessageFetchResult,
+  SearchMessageOptions,
+  SearchMessageResult,
+  ProduceMessage,
+  ConsumerGroup,
+  ConsumerGroupDetails,
+  ResetOffsetOptions,
+  UpdateCheckResult,
+  DownloadProgress,
+  IpcResponse
+} from '../../shared/types'
 
-interface KafkaConnection {
-  id: string
-  name: string
-  brokers: string[]
-  ssl?: boolean | TLSConfig
-  sasl?: {
-    mechanism: 'plain' | 'scram-sha-256' | 'scram-sha-512'
-    username: string
-    password: string
-  }
-  schemaRegistry?: {
-    url: string
-    username?: string
-    password?: string
-  }
-  color?: string
-  createdAt: number
-  updatedAt: number
-}
-
-interface TopicConfig {
-  name: string
-  numPartitions: number
-  replicationFactor: number
-  configEntries?: Record<string, string>
-}
-
-interface MessageOptions {
-  partition?: number
-  fromOffset?: string
-  fromTimestamp?: number
-  limit?: number
-}
-
-interface SearchMessageOptions {
-  query: string
-  partition?: number
-  fromOffset?: string
-  fromPartition?: number
-  maxScan?: number
-  maxMatches?: number
-  requestId?: string
-}
-
-interface ProduceMessage {
-  key?: string
-  value: string | null
-  headers?: Record<string, string>
-  partition?: number
-}
-
-interface ResetOffsetOptions {
-  type: 'earliest' | 'latest' | 'timestamp' | 'offset'
-  timestamp?: number
-  offset?: string
-  partitions?: number[]
-}
-
-interface UpdateCheckResult {
-  updateAvailable: boolean
-  version: string
-  releaseNotes?: string
-  releaseDate?: string
-}
-
-interface DownloadProgress {
-  bytesPerSecond: number
-  percent: number
-  transferred: number
-  total: number
-}
-
-interface UpdaterApi {
-  checkForUpdates: () => Promise<UpdateCheckResult>
-  downloadUpdate: () => Promise<{ success: boolean }>
-  installUpdate: () => Promise<void>
-  getVersion: () => Promise<string>
-  onCheckingForUpdate: (callback: () => void) => () => void
-  onUpdateAvailable: (callback: (info: UpdateCheckResult) => void) => () => void
-  onUpdateNotAvailable: (callback: () => void) => () => void
-  onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void
-  onUpdateDownloaded: (callback: (info: UpdateCheckResult) => void) => () => void
-  onError: (callback: (error: string) => void) => () => void
-}
-
-interface WindowApi {
-  connections: {
-    getAll: () => Promise<KafkaConnection[]>
-    get: (id: string) => Promise<KafkaConnection | undefined>
-    save: (connection: Omit<KafkaConnection, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => Promise<KafkaConnection>
-    delete: (id: string) => Promise<void>
-    test: (connection: Omit<KafkaConnection, 'id' | 'createdAt' | 'updatedAt'>) => Promise<{ success: boolean; error?: string }>
-    pickCertFile: () => Promise<{ success: true; data: { filename: string; content: string } | null } | { success: false; error: string }>
-  }
-  kafka: {
-    connect: (connectionId: string) => Promise<void>
-    disconnect: (connectionId: string) => Promise<void>
-    getClusterInfo: (connectionId: string) => Promise<any>
-    getTopics: (connectionId: string) => Promise<string[]>
-    getTopicMetadata: (connectionId: string, topic: string) => Promise<any>
-    getTopicConfig: (connectionId: string, topic: string) => Promise<any>
-    getBrokerConfig: (connectionId: string) => Promise<any>
-    createTopic: (connectionId: string, config: TopicConfig) => Promise<void>
-    deleteTopic: (connectionId: string, topic: string) => Promise<void>
-    getMessages: (connectionId: string, topic: string, options?: MessageOptions) => Promise<any[]>
-    produceMessage: (connectionId: string, topic: string, message: ProduceMessage) => Promise<void>
-    getConsumerGroups: (connectionId: string) => Promise<any[]>
-    getConsumerGroupDetails: (connectionId: string, groupId: string) => Promise<any>
-    deleteConsumerGroup: (connectionId: string, groupId: string) => Promise<void>
-    resetOffsets: (connectionId: string, groupId: string, topic: string, options: ResetOffsetOptions) => Promise<void>
-    deleteRecords: (connectionId: string, topic: string, partitionOffsets: { partition: number; offset: string }[]) => Promise<void>
-    searchMessages: (connectionId: string, topic: string, options: SearchMessageOptions) => Promise<any>
-    cancelSearch: (connectionId: string, requestId: string) => Promise<void>
-  }
-  updater: UpdaterApi
-}
+type ConnectionInput = Omit<KafkaConnection, 'id' | 'createdAt' | 'updatedAt'>
 
 declare global {
   interface Window {
-    api: WindowApi
+    api: {
+      connections: {
+        getAll: () => Promise<IpcResponse<KafkaConnection[]>>
+        get: (id: string) => Promise<IpcResponse<KafkaConnection | undefined>>
+        save: (connection: ConnectionInput & { id?: string }) => Promise<IpcResponse<KafkaConnection>>
+        delete: (id: string) => Promise<IpcResponse<void>>
+        test: (connection: ConnectionInput) => Promise<IpcResponse<{ success: boolean; error?: string }>>
+        pickCertFile: () => Promise<IpcResponse<{ filename: string; content: string } | null>>
+      }
+      kafka: {
+        connect: (connectionId: string) => Promise<IpcResponse<void>>
+        disconnect: (connectionId: string) => Promise<IpcResponse<void>>
+        getClusterInfo: (connectionId: string) => Promise<IpcResponse<ClusterInfo>>
+        getTopics: (connectionId: string) => Promise<IpcResponse<string[]>>
+        getTopicMetadata: (connectionId: string, topic: string) => Promise<IpcResponse<TopicMetadata>>
+        getTopicConfig: (connectionId: string, topic: string) => Promise<IpcResponse<ConfigEntry[]>>
+        getBrokerConfig: (connectionId: string) => Promise<IpcResponse<ConfigEntry[]>>
+        createTopic: (connectionId: string, config: TopicConfig) => Promise<IpcResponse<void>>
+        deleteTopic: (connectionId: string, topic: string) => Promise<IpcResponse<void>>
+        getMessages: (connectionId: string, topic: string, options?: MessageOptions) => Promise<IpcResponse<MessageFetchResult>>
+        produceMessage: (connectionId: string, topic: string, message: ProduceMessage) => Promise<IpcResponse<void>>
+        getConsumerGroups: (connectionId: string) => Promise<IpcResponse<ConsumerGroup[]>>
+        getConsumerGroupDetails: (connectionId: string, groupId: string) => Promise<IpcResponse<ConsumerGroupDetails>>
+        deleteConsumerGroup: (connectionId: string, groupId: string) => Promise<IpcResponse<void>>
+        resetOffsets: (connectionId: string, groupId: string, topic: string, options: ResetOffsetOptions) => Promise<IpcResponse<void>>
+        deleteRecords: (connectionId: string, topic: string, partitionOffsets: { partition: number; offset: string }[]) => Promise<IpcResponse<void>>
+        searchMessages: (connectionId: string, topic: string, options: SearchMessageOptions) => Promise<IpcResponse<SearchMessageResult>>
+        cancelSearch: (connectionId: string, requestId: string) => Promise<IpcResponse<void>>
+      }
+      updater: {
+        checkForUpdates: () => Promise<UpdateCheckResult>
+        downloadUpdate: () => Promise<{ success: boolean }>
+        installUpdate: () => Promise<void>
+        getVersion: () => Promise<string>
+        onCheckingForUpdate: (callback: () => void) => () => void
+        onUpdateAvailable: (callback: (info: UpdateCheckResult) => void) => () => void
+        onUpdateNotAvailable: (callback: () => void) => () => void
+        onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void
+        onUpdateDownloaded: (callback: (info: UpdateCheckResult) => void) => () => void
+        onError: (callback: (error: string) => void) => () => void
+      }
+    }
   }
 }
 

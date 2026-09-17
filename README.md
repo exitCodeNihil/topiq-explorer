@@ -6,9 +6,8 @@ A cross-platform desktop application for exploring and managing Apache Kafka clu
 
 - **Connection Management** - Save and manage multiple Kafka cluster connections with SSL/SASL support
 - **Topic Browser** - View, create, and manage topics with partition details
-- **Message Viewer** - Browse messages with filtering, search, and multiple format support (JSON, Avro, Protobuf)
+- **Message Viewer** - Browse messages with filtering, search, and JSON formatting
 - **Consumer Groups** - Monitor consumer group status, lag, and member assignments
-- **Schema Registry** - Integrate with Confluent Schema Registry for Avro/Protobuf deserialization
 
 ## Tech Stack
 
@@ -49,7 +48,7 @@ Download the latest release for your platform from the [Releases](https://github
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - Yarn
 
 ### Setup
@@ -62,27 +61,30 @@ cd topiq-explorer
 # Install dependencies
 yarn install
 
-# Start development server
-yarn electron:dev
+# Start development server (Vite + Electron)
+yarn dev
 ```
 
 ### Build Commands
 
 ```bash
-# Build for current platform
+# Type-check and build renderer + main process into dist/ and dist-electron/ (no packaging)
 yarn build
 
-# Build for macOS
+# Package for current platform
+yarn package
+
+# Package for macOS / Windows / Linux
 yarn package:mac
-
-# Build for Windows
 yarn package:win
-
-# Build for Linux
 yarn package:linux
 ```
 
-Build artifacts are output to the `release/` directory.
+Packaged artifacts are output to the `release/` directory.
+
+### Testing against local Kafka
+
+`docker/` contains a Compose stack with plain, SASL/PLAIN, SCRAM and SSL brokers. See [TESTING.md](TESTING.md).
 
 ## Project Structure
 
@@ -94,8 +96,11 @@ Build artifacts are output to the `release/` directory.
 │   ├── stores/         # Zustand state stores
 │   └── types/          # TypeScript type definitions
 ├── electron/           # Electron main process
+├── shared/             # Types shared between renderer and main process
+├── docker/             # Local Kafka brokers for testing (see TESTING.md)
+├── docs/               # Design notes and reviews
 ├── build/              # Build resources (icons)
-└── release/            # Build output
+└── release/            # Packaged output
 ```
 
 ## Contributing
@@ -108,4 +113,4 @@ Releases are automated via GitHub Actions. Version bumps are controlled by PR la
 
 ## License
 
-- see [LICENSE](LICENSE) for details.
+Apache-2.0 - see [LICENSE](LICENSE) for details.

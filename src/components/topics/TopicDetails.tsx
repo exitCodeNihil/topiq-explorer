@@ -45,6 +45,8 @@ export function TopicDetails() {
   const topicConfig = useTopicStore((state) => state.topicConfig)
   const loadMessages = useTopicStore((state) => state.loadMessages)
   const loadTopicMetadata = useTopicStore((state) => state.loadTopicMetadata)
+  const metadataError = useTopicStore((state) => state.error)
+  const isLoadingMetadata = useTopicStore((state) => state.isLoadingMetadata)
   const messageToRepublish = useTopicStore((state) => state.messageToRepublish)
   const activeConnectionId = useConnectionStore((state) => state.activeConnectionId)
 
@@ -83,7 +85,8 @@ export function TopicDetails() {
         partitionOffsets.push({ partition: partitionNum, offset: targetOffset })
       }
 
-      await window.api.kafka.deleteRecords(activeConnectionId, selectedTopic, partitionOffsets)
+      const result = await window.api.kafka.deleteRecords(activeConnectionId, selectedTopic, partitionOffsets)
+      if (!result.success) throw new Error(result.error || 'Failed to delete records')
 
       toast({
         title: 'Records Deleted',
@@ -125,7 +128,16 @@ export function TopicDetails() {
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center text-muted-foreground">
             <Database className="mx-auto h-12 w-12 mb-3 opacity-30" />
-            <p>Select a topic to view details</p>
+            {selectedTopic && metadataError && !isLoadingMetadata ? (
+              <>
+                <p className="text-destructive mb-3">{metadataError}</p>
+                <Button variant="outline" size="sm" onClick={() => activeConnectionId && loadTopicMetadata(activeConnectionId, selectedTopic)}>
+                  Retry
+                </Button>
+              </>
+            ) : (
+              <p>Select a topic to view details</p>
+            )}
           </div>
         </div>
       </div>

@@ -63,7 +63,7 @@ export function UpdateNotification() {
   }
 
   const handleInstall = () => {
-    window.api.updater.installUpdate()
+    window.api.updater.installUpdate().catch(() => {})
   }
 
   const handleRetry = async () => {

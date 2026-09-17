@@ -5,7 +5,7 @@ This guide covers how to test Topiq Explorer with different authentication metho
 ## Prerequisites
 
 - Docker and Docker Compose installed
-- Node.js 20+ for running the application
+- Node.js 22+ for running the application
 - OpenSSL and Java keytool (for SSL certificate generation)
 
 ## Quick Start
@@ -100,7 +100,7 @@ Keystore password: `topiq-explorer`
 
 ### Test 1: Basic Connectivity
 
-1. Start the application: `npm run dev`
+1. Start the application: `yarn dev`
 2. Create a new connection with the "No Authentication" settings
 3. Click "Test Connection" - should show success
 4. Click "Connect" - should connect and list topics
@@ -153,7 +153,7 @@ Keystore password: `topiq-explorer`
 
 ### Test 6: SCRAM Authentication
 
-1. Wait for SCRAM users to be created (check docker logs):
+1. The `topiq-explorer-scram-init` container creates the `admin` and `client` users before the broker starts; check it succeeded:
    ```bash
    docker logs topiq-explorer-scram-init
    ```

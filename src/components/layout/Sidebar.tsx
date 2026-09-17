@@ -256,6 +256,7 @@ export function Sidebar() {
 
         {/* Add Connection Button */}
         <button
+          aria-label="Add connection"
           onClick={() => {
             setEditingConnection(null)
             setIsDialogOpen(true)

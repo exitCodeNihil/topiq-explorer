@@ -17,8 +17,9 @@ export default defineConfig({
           build: {
             target: 'node22',
             outDir: 'dist-electron',
+            emptyOutDir: true, // main builds first; stale tsc output must not ship
             rollupOptions: {
-              external: ['electron', 'electron-store', 'kafkajs', '@kafkajs/confluent-schema-registry']
+              external: ['electron', 'electron-store', 'kafkajs']
             }
           }
         }

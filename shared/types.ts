@@ -74,6 +74,7 @@ export interface MessageOptions {
   fromOffset?: string
   fromTimestamp?: number
   limit?: number
+  fromOffsets?: Record<number, string>  // per-partition resume cursors (multi-partition paging)
 }
 
 export interface MessageFetchResult {
@@ -81,6 +82,7 @@ export interface MessageFetchResult {
   hasMore: boolean
   nextOffset: string | null
   nextPartition?: number
+  nextOffsets?: Record<number, string>  // per-partition cursors for the next page
 }
 
 export interface SearchMessageOptions {

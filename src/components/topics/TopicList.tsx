@@ -39,7 +39,7 @@ export function TopicList() {
 
   const topics = useTopicStore((state) => state.topics)
   const selectedTopic = useTopicStore((state) => state.selectedTopic)
-  const isLoading = useTopicStore((state) => state.isLoading)
+  const isLoading = useTopicStore((state) => state.isLoadingTopics)
   const selectTopic = useTopicStore((state) => state.selectTopic)
   const loadTopics = useTopicStore((state) => state.loadTopics)
   const loadTopicMetadata = useTopicStore((state) => state.loadTopicMetadata)
@@ -101,12 +101,12 @@ export function TopicList() {
             className="pl-9 h-9 bg-bg-main border-border-mute font-mono text-sm"
           />
         </div>
-        <Button variant="ghost" size="icon" className="h-9 w-9 text-text-secondary" onClick={handleRefresh} disabled={isLoading}>
+        <Button variant="ghost" size="icon" className="h-9 w-9 text-text-secondary" onClick={handleRefresh} disabled={isLoading} aria-label="Refresh topics">
           <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
         </Button>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-9 w-9 text-text-secondary">
+            <Button variant="ghost" size="icon" className="h-9 w-9 text-text-secondary" aria-label="Create topic">
               <Plus className="h-4 w-4" />
             </Button>
           </DialogTrigger>
@@ -144,11 +144,10 @@ export function TopicList() {
                       ? 'bg-bg-main border-l-2 border-l-accent-active pl-[18px] pr-5 py-4'
                       : 'hover:bg-bg-main/50 px-5 py-4'
                   }`}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleSelectTopic(topic)}
-                  onContextMenu={(e) => {
-                    e.preventDefault()
-                    setDeleteTopicName(topic)
-                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSelectTopic(topic) }}
                 >
                   <span className="flex-1 truncate text-sm font-mono text-text-primary">{topic}</span>
                   <DropdownMenu>
@@ -156,7 +155,8 @@ export function TopicList() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        aria-label={`Actions for ${topic}`}
                       >
                         <Trash2 className="h-3 w-3 text-text-secondary" />
                       </Button>

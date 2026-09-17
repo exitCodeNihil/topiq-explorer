@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useConnectionStore } from '@/stores/connection.store'
 import { useTopicStore } from '@/stores/topic.store'
 import { useConsumerStore } from '@/stores/consumer.store'
@@ -21,17 +21,15 @@ export function ClusterDetails() {
   const topics = useTopicStore((state) => state.topics)
   const consumerGroups = useConsumerStore((state) => state.consumerGroups)
 
+  // Fetch once per connection; a failed load must not re-trigger the effect
+  const loadedFor = useRef<string | null>(null)
   useEffect(() => {
-    if (activeConnectionId && !clusterInfo && !isLoadingClusterInfo) {
-      loadClusterInfo(activeConnectionId)
-    }
-  }, [activeConnectionId, clusterInfo, isLoadingClusterInfo, loadClusterInfo])
-
-  useEffect(() => {
-    if (activeConnectionId && brokerConfig.length === 0 && !isLoadingBrokerConfig) {
-      loadBrokerConfig(activeConnectionId)
-    }
-  }, [activeConnectionId, brokerConfig.length, isLoadingBrokerConfig, loadBrokerConfig])
+    if (!activeConnectionId || loadedFor.current === activeConnectionId) return
+    loadedFor.current = activeConnectionId
+    if (!clusterInfo) loadClusterInfo(activeConnectionId)
+    if (brokerConfig.length === 0) loadBrokerConfig(activeConnectionId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when the connection changes
+  }, [activeConnectionId])
 
   if (isLoadingClusterInfo) {
     return (
@@ -163,7 +161,7 @@ export function ClusterDetails() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {clusterInfo.brokers
+                {[...clusterInfo.brokers]
                   .sort((a, b) => a.nodeId - b.nodeId)
                   .map((broker) => (
                     <tr key={broker.nodeId}>

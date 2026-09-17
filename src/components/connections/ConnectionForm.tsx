@@ -33,6 +33,53 @@ interface ConnectionFormProps {
   onClose: () => void
 }
 
+function CertFileInput({
+  label,
+  value,
+  onChange,
+  onPick
+}: {
+  label: string
+  value: CertFile | null
+  onChange: (file: CertFile | null) => void
+  onPick: () => void
+}) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-text-secondary text-xs">{label}</Label>
+      <div className="flex items-center gap-2">
+        {value ? (
+          <>
+            <span className="flex-1 truncate rounded-md border border-border-mute bg-bg-main px-3 py-2 text-sm font-mono text-text-secondary">
+              {value.filename}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => onChange(null)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={onPick}
+          >
+            <Upload className="h-4 w-4" />
+            Select File
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
   const existingSsl = connection?.ssl
   const existingTls = typeof existingSsl === 'object' && existingSsl !== null ? existingSsl as TLSConfig : null
@@ -170,49 +217,6 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
     }
   }
 
-  const CertFileInput = ({
-    label,
-    value,
-    onChange
-  }: {
-    label: string
-    value: CertFile | null
-    onChange: (file: CertFile | null) => void
-  }) => (
-    <div className="space-y-1">
-      <Label className="text-text-secondary text-xs">{label}</Label>
-      <div className="flex items-center gap-2">
-        {value ? (
-          <>
-            <span className="flex-1 truncate rounded-md border border-border-mute bg-bg-main px-3 py-2 text-sm font-mono text-text-secondary">
-              {value.filename}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0"
-              onClick={() => onChange(null)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => handlePickCertFile(onChange)}
-          >
-            <Upload className="h-4 w-4" />
-            Select File
-          </Button>
-        )}
-      </div>
-    </div>
-  )
-
   return (
     <div className="flex flex-col">
       <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
@@ -305,9 +309,9 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
 
             {advancedOpen && (
               <div className="space-y-4 rounded-md border border-border-mute bg-bg-main/30 p-4 mt-2">
-                <CertFileInput label="CA Certificate" value={caCert} onChange={setCaCert} />
-                <CertFileInput label="Client Certificate" value={clientCert} onChange={setClientCert} />
-                <CertFileInput label="Client Key" value={clientKey} onChange={setClientKey} />
+                <CertFileInput label="CA Certificate" value={caCert} onChange={setCaCert} onPick={() => handlePickCertFile(setCaCert)} />
+                <CertFileInput label="Client Certificate" value={clientCert} onChange={setClientCert} onPick={() => handlePickCertFile(setClientCert)} />
+                <CertFileInput label="Client Key" value={clientKey} onChange={setClientKey} onPick={() => handlePickCertFile(setClientKey)} />
 
                 <div className="space-y-1">
                   <Label htmlFor="passphrase" className="text-text-secondary text-xs">Key Passphrase</Label>
