@@ -61,7 +61,7 @@
     "electron": "^44.4.1",
     "electron-builder": "^26.15.3",
     "postcss": "^8.5.23",
-    "tailwindcss": "^3.4.1",
+    "tailwindcss": "^4.3.3",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.3.3",
     "vite": "^6.4.3",
