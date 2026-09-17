@@ -8,7 +8,7 @@ import type { AppSettings } from '../../shared/types'
 // Injected by vite at build time from the POSTHOG_KEY env var (see vite.config.ts); empty = telemetry off.
 declare const __POSTHOG_KEY__: string
 const POSTHOG_KEY = __POSTHOG_KEY__
-const POSTHOG_HOST = 'https://us.i.posthog.com'
+const POSTHOG_HOST = 'https://eu.i.posthog.com'
 const HEARTBEAT_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 interface SettingsSchema extends AppSettings {
