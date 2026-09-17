@@ -54,7 +54,13 @@ declare global {
       settings: {
         get: () => Promise<IpcResponse<AppSettings>>
         set: (patch: Partial<AppSettings>) => Promise<IpcResponse<AppSettings>>
+        resetInstallId: () => Promise<IpcResponse<void>>
+        openDataFolder: () => Promise<IpcResponse<void>>
       }
+      shell: {
+        openExternal: (url: string) => Promise<IpcResponse<void>>
+      }
+      platform: NodeJS.Platform
       updater: {
         checkForUpdates: () => Promise<UpdateCheckResult>
         downloadUpdate: () => Promise<{ success: boolean }>

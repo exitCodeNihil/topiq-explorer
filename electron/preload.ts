@@ -66,8 +66,17 @@ const api = {
   // Settings operations
   settings: {
     get: (): Promise<IpcResponse<AppSettings>> => ipcRenderer.invoke('settings:get'),
-    set: (patch: Partial<AppSettings>): Promise<IpcResponse<AppSettings>> => ipcRenderer.invoke('settings:set', patch)
+    set: (patch: Partial<AppSettings>): Promise<IpcResponse<AppSettings>> => ipcRenderer.invoke('settings:set', patch),
+    resetInstallId: (): Promise<IpcResponse<void>> => ipcRenderer.invoke('settings:resetInstallId'),
+    openDataFolder: (): Promise<IpcResponse<void>> => ipcRenderer.invoke('settings:openDataFolder')
   },
+
+  // Opens a URL in the system browser; main allow-lists the project GitHub URLs only
+  shell: {
+    openExternal: (url: string): Promise<IpcResponse<void>> => ipcRenderer.invoke('shell:openExternal', url)
+  },
+
+  platform: process.platform,
 
   // Updater operations
   updater: {

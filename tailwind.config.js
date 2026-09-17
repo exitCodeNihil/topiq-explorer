@@ -2,6 +2,7 @@
 module.exports = {
   darkMode: ["class"],
   content: [
+    './index.html',
     './pages/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
     './app/**/*.{ts,tsx}',
@@ -64,14 +65,15 @@ module.exports = {
           foreground: "hsl(var(--warning-foreground))",
         },
         sidebar: "hsl(var(--sidebar))",
-        'bg-main': '#0D0F12',
-        'bg-sidebar': '#16191E',
-        'bg-panel': '#1A1D23',
-        'border-mute': '#2D3139',
-        'text-primary': '#E4E4E7',
-        'text-secondary': '#A1A1AA',
-        'accent-active': '#00FF41',
-        'accent-violet': '#9D4EDD',
+        // Project tokens, themed via CSS variables in src/index.css (:root = light, .dark = dark)
+        'bg-main': 'hsl(var(--bg-main) / <alpha-value>)',
+        'bg-sidebar': 'hsl(var(--bg-sidebar) / <alpha-value>)',
+        'bg-panel': 'hsl(var(--bg-panel) / <alpha-value>)',
+        'border-mute': 'hsl(var(--border-mute) / <alpha-value>)',
+        'text-primary': 'hsl(var(--text-primary) / <alpha-value>)',
+        'text-secondary': 'hsl(var(--text-secondary) / <alpha-value>)',
+        'accent-active': 'hsl(var(--accent-active) / <alpha-value>)',
+        'accent-violet': 'hsl(var(--accent-violet) / <alpha-value>)',
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -80,7 +82,7 @@ module.exports = {
       },
       boxShadow: {
         'subtle': '0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2)',
-        'glow-green': '0 0 12px rgba(0, 255, 65, 0.3), 0 0 4px rgba(0, 255, 65, 0.2)',
+        'glow-green': '0 0 12px hsl(var(--accent-active) / 0.3), 0 0 4px hsl(var(--accent-active) / 0.2)',
       },
       keyframes: {
         "accordion-down": {

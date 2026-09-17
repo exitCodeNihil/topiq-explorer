@@ -142,7 +142,7 @@ export function UpdateNotification() {
           {state === 'downloaded' && (
             <>
               <div className="flex items-center gap-2 text-sm font-medium">
-                <CheckCircle className="h-4 w-4 text-green-500" />
+                <CheckCircle className="h-4 w-4 text-success" />
                 Ready to Install
               </div>
               <p className="mt-1 text-sm text-muted-foreground">

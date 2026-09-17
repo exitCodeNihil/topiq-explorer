@@ -3,6 +3,7 @@ import { useConnectionStore } from '@/stores/connection.store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/hooks/use-toast'
 import type { KafkaConnection, TLSConfig } from '@/types/kafka.types'
@@ -25,7 +26,7 @@ function getInitialSecurityProtocol(connection?: KafkaConnection | null): string
 
 function getInitialCertFile(value: string | undefined): CertFile | null {
   if (!value) return null
-  return { filename: 'loaded from connection', content: value }
+  return { filename: 'Saved certificate', content: value }
 }
 
 interface ConnectionFormProps {
@@ -44,9 +45,10 @@ function CertFileInput({
   onChange: (file: CertFile | null) => void
   onPick: () => void
 }) {
+  const id = 'cert-' + label.toLowerCase().replace(/\s+/g, '-')
   return (
-    <div className="space-y-1">
-      <Label className="text-text-secondary text-xs">{label}</Label>
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
       <div className="flex items-center gap-2">
         {value ? (
           <>
@@ -58,6 +60,7 @@ function CertFileInput({
               variant="ghost"
               size="icon"
               className="h-8 w-8 shrink-0"
+              aria-label={`Remove ${label}`}
               onClick={() => onChange(null)}
             >
               <X className="h-4 w-4" />
@@ -65,6 +68,7 @@ function CertFileInput({
           </>
         ) : (
           <Button
+            id={id}
             type="button"
             variant="outline"
             size="sm"
@@ -130,7 +134,7 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
       if (result.data) {
         setter(result.data)
       }
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to pick certificate file',
@@ -218,10 +222,10 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
   }
 
   return (
-    <div className="flex flex-col">
-      <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
         <div className="space-y-2">
-          <Label htmlFor="name" className="text-text-secondary text-xs">Connection Name</Label>
+          <Label htmlFor="name">Connection Name</Label>
           <Input
             id="name"
             placeholder="My Kafka Cluster"
@@ -231,7 +235,7 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="brokers" className="text-text-secondary text-xs">Bootstrap Servers</Label>
+          <Label htmlFor="brokers">Bootstrap Servers</Label>
           <Input
             id="brokers"
             placeholder="localhost:9092, localhost:9093"
@@ -239,13 +243,13 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
             onChange={(e) => setBrokers(e.target.value)}
             className="font-mono"
           />
-          <p className="text-[10px] text-text-secondary/60">Comma-separated list of broker addresses</p>
+          <p className="text-xs text-text-secondary">Comma-separated list of broker addresses</p>
         </div>
 
         <div className="space-y-2">
-          <Label className="text-text-secondary text-xs">Security Protocol</Label>
+          <Label htmlFor="securityProtocol">Security Protocol</Label>
           <Select value={securityProtocol} onValueChange={setSecurityProtocol}>
-            <SelectTrigger>
+            <SelectTrigger id="securityProtocol">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -260,9 +264,9 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
         {useSasl && (
           <div className="space-y-4 rounded-md border border-border-mute bg-bg-main/30 p-4">
             <div className="space-y-2">
-              <Label className="text-text-secondary text-xs">SASL Mechanism</Label>
+              <Label htmlFor="saslMechanism">SASL Mechanism</Label>
               <Select value={saslMechanism} onValueChange={(v) => setSaslMechanism(v as typeof saslMechanism)}>
-                <SelectTrigger>
+                <SelectTrigger id="saslMechanism">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -274,7 +278,7 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="username" className="text-text-secondary text-xs">Username</Label>
+              <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
                 value={username}
@@ -283,7 +287,7 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-text-secondary text-xs">Password</Label>
+              <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
                 type="password"
@@ -299,8 +303,9 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
           <div>
             <button
               type="button"
+              aria-expanded={advancedOpen}
               onClick={() => setAdvancedOpen(!advancedOpen)}
-              className="flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary transition-colors w-full py-2"
+              className="flex w-full items-center gap-2 rounded-sm py-2 text-xs text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar"
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
               <span>Advanced Options</span>
@@ -313,8 +318,8 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
                 <CertFileInput label="Client Certificate" value={clientCert} onChange={setClientCert} onPick={() => handlePickCertFile(setClientCert)} />
                 <CertFileInput label="Client Key" value={clientKey} onChange={setClientKey} onPick={() => handlePickCertFile(setClientKey)} />
 
-                <div className="space-y-1">
-                  <Label htmlFor="passphrase" className="text-text-secondary text-xs">Key Passphrase</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="passphrase">Key Passphrase</Label>
                   <Input
                     id="passphrase"
                     type="password"
@@ -324,21 +329,21 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
                   />
                 </div>
 
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       id="rejectUnauthorized"
                       checked={!rejectUnauthorized}
                       onChange={(e) => setRejectUnauthorized(!e.target.checked)}
-                      className="h-4 w-4 rounded border-border-mute accent-accent-active"
+                      className="h-4 w-4 accent-accent-active"
                     />
-                    <Label htmlFor="rejectUnauthorized" className="cursor-pointer text-text-secondary text-xs">
+                    <Label htmlFor="rejectUnauthorized" className="cursor-pointer">
                       Skip certificate verification
                     </Label>
                   </div>
                   {!rejectUnauthorized && (
-                    <p className="text-[10px] text-amber-500">
+                    <p className="text-xs text-warning">
                       Warning: Disabling certificate verification makes the connection vulnerable to man-in-the-middle attacks.
                     </p>
                   )}
@@ -371,8 +376,7 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
         )}
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between px-6 pb-6 pt-4 border-t border-border-mute">
+      <DialogFooter className="justify-between">
         <Button variant="outline" onClick={handleTest} disabled={isTesting || !brokers.trim()} size="sm">
           {isTesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Test Connection
@@ -386,7 +390,7 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
             {connection ? 'Update' : 'Connect'}
           </Button>
         </div>
-      </div>
+      </DialogFooter>
     </div>
   )
 }

@@ -44,7 +44,7 @@ export function CreateTopic({ onClose }: CreateTopicProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 px-6 py-4">
       <div className="space-y-2">
         <Label htmlFor="topic-name">Topic Name</Label>
         <Input

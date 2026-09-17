@@ -10,6 +10,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogDescription,
   DialogTitle,
   DialogTrigger
 } from '@/components/ui/dialog'
@@ -193,6 +194,7 @@ export function ConsumerGroupDetails() {
                           <DialogContent>
                             <DialogHeader>
                               <DialogTitle>Reset Offsets for {topic}</DialogTitle>
+                              <DialogDescription className="sr-only">Move the committed offsets of the selected partitions.</DialogDescription>
                             </DialogHeader>
                             <OffsetManager
                               groupId={selectedGroupId}

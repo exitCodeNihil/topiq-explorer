@@ -115,10 +115,10 @@ export function MessageProducer({ topic, onClose }: MessageProducerProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 px-6 py-4">
       {isRepublishing && (
-        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 p-3 text-sm">
-          <Info className="h-4 w-4 text-muted-foreground" />
+        <div className="flex items-center gap-2 rounded-md border border-border-mute bg-bg-panel/50 p-3 text-sm text-text-primary">
+          <Info className="h-4 w-4 text-text-secondary" />
           <span>Republishing a message. Modify the content below and send as a new message.</span>
         </div>
       )}
@@ -154,7 +154,7 @@ export function MessageProducer({ topic, onClose }: MessageProducerProps) {
         </div>
         <textarea
           id="value"
-          className="w-full h-48 rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="h-48 w-full rounded-md border border-border-mute bg-bg-main px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-secondary/50 focus-visible:border-accent-active focus-visible:outline-none"
           placeholder='{"example": "value"}'
           value={value}
           onChange={(e) => setValue(e.target.value)}

@@ -32,6 +32,10 @@ Production builds inline a PostHog key for the anonymous usage heartbeat and fai
 | `main` | The only long-lived branch — every merge is auto-released |
 | `feature/*`, `fix/*` | Short-lived branches off `main`, squash-merged via PR |
 
+## Reporting Bugs and Requesting Features
+
+Use the issue templates (bug report, feature request, question) at https://github.com/exitCodeNihil/topiq-explorer/issues/new/choose. For bugs, include the app version from Settings → About and your OS.
+
 ## Submitting a Pull Request
 
 1. Create a branch from `main`

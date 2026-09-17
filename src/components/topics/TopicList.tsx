@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger
@@ -113,6 +114,7 @@ export function TopicList() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create Topic</DialogTitle>
+              <DialogDescription className="sr-only">Choose a name, partition count and replication factor.</DialogDescription>
             </DialogHeader>
             <CreateTopic onClose={() => setIsCreateOpen(false)} />
           </DialogContent>

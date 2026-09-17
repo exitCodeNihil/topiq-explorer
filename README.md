@@ -111,6 +111,16 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, branching model, a
 
 Releases are automated via GitHub Actions. Version bumps are controlled by PR labels. See [RELEASING.md](RELEASING.md) for details.
 
+## Feedback
+
+Found a bug, want a feature, or have a question? Open an issue using one of the templates:
+
+- [Report a bug](https://github.com/exitCodeNihil/topiq-explorer/issues/new?template=bug_report.yml)
+- [Request a feature](https://github.com/exitCodeNihil/topiq-explorer/issues/new?template=feature_request.yml)
+- [Ask a question](https://github.com/exitCodeNihil/topiq-explorer/issues/new?template=question.yml)
+
+The same links are in the app under Settings → About.
+
 ## License
 
 Apache-2.0 - see [LICENSE](LICENSE) for details.

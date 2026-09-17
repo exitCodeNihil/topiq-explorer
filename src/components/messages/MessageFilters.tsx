@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Filter } from 'lucide-react'
 import type { MessageOptions } from '@/types/kafka.types'
+import { useSettingsStore } from '@/stores/settings.store'
 
 interface MessageFiltersProps {
   filters: MessageOptions
@@ -22,7 +23,7 @@ export function MessageFilters({ filters, onFilterChange }: MessageFiltersProps)
   }
 
   const handleReset = () => {
-    const defaultFilters = { limit: 100 }
+    const defaultFilters = { limit: useSettingsStore.getState().settings.messagePageSize }
     setLocalFilters(defaultFilters)
     onFilterChange(defaultFilters)
     setIsOpen(false)
@@ -74,7 +75,7 @@ export function MessageFilters({ filters, onFilterChange }: MessageFiltersProps)
           <div className="space-y-2">
             <Label>Limit</Label>
             <Select
-              value={localFilters.limit?.toString() || '100'}
+              value={String(localFilters.limit ?? useSettingsStore.getState().settings.messagePageSize)}
               onValueChange={(v) => setLocalFilters({ ...localFilters, limit: parseInt(v, 10) })}
             >
               <SelectTrigger>

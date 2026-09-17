@@ -1,0 +1,51 @@
+name: Bug report
+description: Something in Topiq Explorer is broken or behaves unexpectedly
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, and what went wrong? Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Connect to ...
+        2. Open topic ...
+        3. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+  - type: input
+    id: version
+    attributes:
+      label: Topiq Explorer version
+      description: Shown in the status bar and in Settings → About.
+      placeholder: 1.5.0
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.1 (Apple Silicon) / Windows 11 / Ubuntu 24.04
+    validations:
+      required: true
+  - type: input
+    id: kafka
+    attributes:
+      label: Kafka version and authentication
+      placeholder: Kafka 3.7, SASL/SCRAM-SHA-256 over TLS
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error text
+      description: Paste any error message. Remove broker addresses and credentials first.
+      render: text
