@@ -4,7 +4,16 @@ import electron from 'vite-plugin-electron'
 import renderer from 'vite-plugin-electron-renderer'
 import path from 'path'
 
-export default defineConfig({
+// PostHog project key is injected at build time from the environment, never committed.
+// Production builds require it unless TELEMETRY=off; `vite` dev serve never sends anyway.
+function posthogKey(command: 'build' | 'serve'): string {
+  if (command !== 'build' || process.env.TELEMETRY === 'off') return ''
+  const key = process.env.POSTHOG_KEY
+  if (!key) throw new Error('POSTHOG_KEY is not set. Export it (or set the GitHub secret), or build with TELEMETRY=off.')
+  return key
+}
+
+export default defineConfig(({ command }) => ({
   plugins: [
     react(),
     electron([
@@ -14,6 +23,9 @@ export default defineConfig({
           options.startup()
         },
         vite: {
+          define: {
+            __POSTHOG_KEY__: JSON.stringify(posthogKey(command))
+          },
           build: {
             target: 'node22',
             outDir: 'dist-electron',
@@ -49,4 +61,4 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true
   }
-})
+}))

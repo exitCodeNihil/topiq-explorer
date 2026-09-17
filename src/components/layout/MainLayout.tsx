@@ -8,9 +8,10 @@ import { ClusterDetails } from '../cluster/ClusterDetails'
 import { useConnectionStore } from '@/stores/connection.store'
 import { useTopicStore } from '@/stores/topic.store'
 import { useConsumerStore } from '@/stores/consumer.store'
-import { Terminal } from 'lucide-react'
+import { Terminal, Settings } from 'lucide-react'
 import { UpdateNotification } from '../updates/UpdateNotification'
 import { UpdateChecker } from '../updates/UpdateChecker'
+import { SettingsDialog } from '../settings/SettingsDialog'
 
 const tabs = [
   { id: 'topics', label: 'Topics' },
@@ -35,6 +36,7 @@ function EmptyState({ message }: { message: string }) {
 
 export function MainLayout() {
   const [activeTab, setActiveTab] = useState('topics')
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const activeConnectionId = useConnectionStore((state) => state.activeConnectionId)
   const connectionStatus = useConnectionStore((state) => state.connectionStatus)
   const connections = useConnectionStore((state) => state.connections)
@@ -163,13 +165,24 @@ export function MainLayout() {
                 </>
               )}
             </div>
-            <UpdateChecker />
+            <div className="flex items-center gap-3">
+              <UpdateChecker />
+              <button
+                type="button"
+                aria-label="Settings"
+                onClick={() => setSettingsOpen(true)}
+                className="text-text-secondary transition-colors hover:text-text-primary"
+              >
+                <Settings className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Update Notification */}
       <UpdateNotification />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   )
 }

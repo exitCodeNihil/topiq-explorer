@@ -167,6 +167,10 @@ export interface UpdateCheckResult {
   releaseDate?: string
 }
 
+export interface AppSettings {
+  telemetryEnabled: boolean
+}
+
 export interface DownloadProgress {
   bytesPerSecond: number
   percent: number

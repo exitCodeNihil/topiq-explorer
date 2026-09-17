@@ -40,6 +40,8 @@ jobs:
 
       - name: Compile application
         run: npx tsc && npx tsc -p tsconfig.electron.json --noEmit && npx vite build
+        env:
+          POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }} # build fails if unset; see RELEASING.md
 
       - name: Upload compiled app
         uses: actions/upload-artifact@v7

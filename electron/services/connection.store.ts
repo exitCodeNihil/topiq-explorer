@@ -28,7 +28,7 @@ interface StoreSchema {
 }
 
 // Get the store path without creating a Store instance
-function getStorePath(storeName: string): string {
+export function getStorePath(storeName: string): string {
   const appName = 'topiq-explorer' // Must match the app name in package.json
   let configDir: string
 
