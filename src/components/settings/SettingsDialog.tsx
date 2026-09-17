@@ -45,9 +45,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           <span className="space-y-1">
             <span className="block text-sm font-medium text-text-primary">Send anonymous usage statistics</span>
             <span className="block text-xs text-text-secondary">
-              Once a day the app sends an anonymous install ID, app version, OS and locale to PostHog so we know how
-              many people use Topiq. Your country is derived from your IP address, which is not stored. Connections,
-              credentials and messages are never sent.
+              The app sends an anonymous install ID, app version, OS and locale once a day, plus which features are
+              used (counts only) to PostHog so we know how many people use Topiq and what matters to them. Your
+              country is derived from your IP address, which is not stored. Broker addresses, credentials, topic
+              names, keys and message contents are never sent.
             </span>
           </span>
         </label>
