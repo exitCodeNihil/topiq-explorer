@@ -4,10 +4,13 @@ import { useConnectionStore } from '@/stores/connection.store'
 import { useTopicStore } from '@/stores/topic.store'
 import { useConsumerStore } from '@/stores/consumer.store'
 import { ConnectionForm } from '../connections/ConnectionForm'
+import { SettingsDialog } from '../settings/SettingsDialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
@@ -49,6 +52,7 @@ function getConnectionId(name: string): string {
 
 export function Sidebar() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [editingConnection, setEditingConnection] = useState<KafkaConnection | null>(null)
   const [deleteConnectionId, setDeleteConnectionId] = useState<string | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
@@ -163,7 +167,7 @@ export function Sidebar() {
 
                   {/* Button */}
                   <button
-                    className={`relative flex w-14 h-14 flex-col items-center justify-center rounded-lg text-[10px] font-mono transition-all duration-200 outline-none ${
+                    className={`relative flex w-14 h-14 flex-col items-center justify-center rounded-lg text-[10px] font-mono transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar ${
                       isActive && isConnected
                         ? 'bg-bg-panel border border-border-mute shadow-subtle text-text-primary'
                         : 'bg-transparent border border-transparent text-text-secondary hover:bg-bg-panel/50 hover:border-border-mute/50'
@@ -187,7 +191,7 @@ export function Sidebar() {
                     <div className="absolute left-16 top-1/2 -translate-y-1/2 z-50 whitespace-nowrap bg-bg-panel border border-border-mute rounded-md px-3 py-2 shadow-subtle pointer-events-none">
                       <p className="text-xs font-semibold text-text-primary">{connection.name}</p>
                       {isConnected && <p className="text-[10px] text-accent-active">Connected</p>}
-                      {isConnecting && <p className="text-[10px] text-yellow-500">Connecting...</p>}
+                      {isConnecting && <p className="text-[10px] text-warning">Connecting...</p>}
                     </div>
                   )}
 
@@ -195,9 +199,9 @@ export function Sidebar() {
                   <div
                     className={`absolute top-1 right-3 w-2 h-2 rounded-full pointer-events-none ${
                       isConnected
-                        ? 'bg-green-600'
+                        ? 'bg-success'
                         : isConnecting
-                        ? 'bg-yellow-600 animate-pulse'
+                        ? 'bg-warning animate-pulse'
                         : 'border border-border-mute bg-transparent'
                     }`}
                   />
@@ -261,17 +265,41 @@ export function Sidebar() {
             setEditingConnection(null)
             setIsDialogOpen(true)
           }}
-          className="flex w-10 h-10 items-center justify-center rounded-full border border-dashed border-border-mute text-text-secondary transition-all duration-200 hover:border-accent-active hover:text-accent-active active:scale-95"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-border-mute text-text-secondary transition-all duration-200 hover:border-accent-active hover:text-accent-active active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar"
         >
           <Plus className="h-5 w-5" />
         </button>
+
+        {/* Settings */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Settings"
+                onClick={() => setSettingsOpen(true)}
+                className="mt-2 flex h-10 w-10 items-center justify-center rounded-full text-text-secondary transition-all duration-200 hover:bg-bg-panel hover:text-text-primary active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar"
+              >
+                <Settings className="h-5 w-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p className="text-xs">Settings</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 
       {/* Connection Form Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) setEditingConnection(null) }}>
-        <DialogContent className="sm:max-w-[520px]">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingConnection ? 'Edit Connection' : 'New Connection'}</DialogTitle>
+            <DialogDescription className="sr-only">
+              {editingConnection ? 'Edit the broker addresses and security settings for this cluster.' : 'Enter broker addresses and security settings for a Kafka cluster.'}
+            </DialogDescription>
           </DialogHeader>
           <ConnectionForm connection={editingConnection} onClose={handleDialogClose} />
         </DialogContent>

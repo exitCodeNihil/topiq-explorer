@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react'
 import { Virtuoso } from 'react-virtuoso'
 import { useTopicStore } from '@/stores/topic.store'
 import { useConnectionStore } from '@/stores/connection.store'
+import { useSettingsStore } from '@/stores/settings.store'
 import { MessageFilters } from './MessageFilters'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -55,6 +56,8 @@ interface MessageRowProps {
 }
 
 const MessageRow = memo(function MessageRow({ message, isExpanded, searchQuery, onToggle, onCopy, onRepublish, onTombstone }: MessageRowProps) {
+  const timestampFormat = useSettingsStore((s) => s.settings.timestampFormat)
+  const prettyPrint = useSettingsStore((s) => s.settings.messageValueFormat === 'auto')
   return (
     <div className="group border-b border-border last:border-b-0">
       <div
@@ -78,7 +81,7 @@ const MessageRow = memo(function MessageRow({ message, isExpanded, searchQuery, 
               O{message.offset}
             </Badge>
             <span className="text-xs text-muted-foreground">
-              {formatTimestamp(message.timestamp)}
+              {formatTimestamp(message.timestamp, timestampFormat)}
             </span>
             {message.key && (
               <Badge variant="outline" className="font-mono text-xs">
@@ -114,7 +117,7 @@ const MessageRow = memo(function MessageRow({ message, isExpanded, searchQuery, 
             <div>
               <h4 className="text-xs font-medium text-muted-foreground mb-1">Value</h4>
               <pre className="json-viewer overflow-auto rounded-md bg-background p-3 text-sm">
-                <HighlightText text={isJson ? JSON.stringify(parsedValue, null, 2) : message.value || '(empty)'} query={searchQuery} />
+                <HighlightText text={isJson && prettyPrint ? JSON.stringify(parsedValue, null, 2) : message.value || '(empty)'} query={searchQuery} />
               </pre>
             </div>
 
@@ -140,7 +143,7 @@ const MessageRow = memo(function MessageRow({ message, isExpanded, searchQuery, 
               <div className="flex gap-4 text-xs text-muted-foreground">
                 <span>Partition: {message.partition}</span>
                 <span>Offset: {message.offset}</span>
-                <span>Timestamp: {formatTimestamp(message.timestamp)}</span>
+                <span>Timestamp: {formatTimestamp(message.timestamp, timestampFormat)}</span>
               </div>
               <div className="flex items-center gap-2">
                 <TooltipProvider>
@@ -197,7 +200,12 @@ const MessageRow = memo(function MessageRow({ message, isExpanded, searchQuery, 
 
 export function MessageViewer() {
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set())
-  const [filters, setFilters] = useState<MessageOptions>({ limit: 100 })
+  const pageSizeSetting = useSettingsStore((s) => s.settings.messagePageSize)
+  const [filters, setFilters] = useState<MessageOptions>(() => ({ limit: pageSizeSetting }))
+  // Follow the Settings page-size default (no-op on mount; applies when the setting changes)
+  useEffect(() => {
+    setFilters((f) => (f.limit === pageSizeSetting ? f : { ...f, limit: pageSizeSetting }))
+  }, [pageSizeSetting])
   const [tombstoneMessage, setTombstoneMessage] = useState<ParsedMessage | null>(null)
   const [isSendingTombstone, setIsSendingTombstone] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')

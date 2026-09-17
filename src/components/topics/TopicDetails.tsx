@@ -176,7 +176,7 @@ export function TopicDetails() {
                   Delete all records before a specific offset. This action cannot be undone.
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 pt-4">
+              <div className="space-y-4 px-6 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="deletePartition">Partition</Label>
                   <Input
@@ -227,6 +227,7 @@ export function TopicDetails() {
             <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
                 <DialogTitle>Produce Message to {selectedTopic}</DialogTitle>
+                <DialogDescription className="sr-only">Compose a key, value and headers, then send.</DialogDescription>
               </DialogHeader>
               <MessageProducer topic={selectedTopic} onClose={() => setIsProducerOpen(false)} />
             </DialogContent>

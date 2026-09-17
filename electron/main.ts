@@ -1,10 +1,11 @@
-import { app, BrowserWindow, ipcMain, dialog, session } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, session, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { autoUpdater } from 'electron-updater'
 import { KafkaService } from './services/kafka.service'
 import { ConnectionStore } from './services/connection.store'
-import { getSettings, setSettings, sendHeartbeat } from './services/telemetry'
+import { sendHeartbeat, track, flushTelemetry, clearTelemetryQueue } from './services/telemetry'
+import { getSettings, setSettings, validateSettingsPatch, resetInstallId, openDataFolder } from './services/settings'
 
 // Configure autoUpdater
 autoUpdater.autoDownload = false
@@ -78,8 +79,9 @@ app.whenReady().then(() => {
   // Anonymous daily usage ping (logs instead of sending in dev mode)
   setTimeout(() => { void sendHeartbeat('startup') }, 3000)
 
-  // Auto-check for updates 3 seconds after app ready (skip in dev mode)
-  if (!process.env.VITE_DEV_SERVER_URL) {
+  // Auto-check for updates 3 seconds after app ready (skip in dev mode, or when the user turned it off)
+  autoUpdater.allowPrerelease = getSettings().allowPrerelease
+  if (!process.env.VITE_DEV_SERVER_URL && getSettings().checkUpdatesOnStartup) {
     setTimeout(() => {
       autoUpdater.checkForUpdates().catch(() => {
         // Silently ignore update check errors on startup
@@ -124,7 +126,7 @@ app.on('before-quit', (event) => {
   if (quitting) return
   event.preventDefault()
   quitting = true
-  kafkaService.disconnectAll().finally(() => app.quit())
+  Promise.allSettled([kafkaService.disconnectAll(), flushTelemetry()]).finally(() => app.quit())
 })
 
 // Standardized IPC response helper
@@ -362,6 +364,7 @@ ipcMain.handle('kafka:connect', async (_, connectionId: string) => {
       return ipcError('Connection not found')
     }
     await kafkaService.connect(connection)
+    track('connection_connected', { ssl: !!connection.ssl, sasl: connection.sasl?.mechanism ?? null })
     return ipcSuccess(undefined)
   } catch (error) {
     return ipcError(error)
@@ -400,7 +403,9 @@ ipcMain.handle('kafka:getTopicMetadata', async (_, connectionId: string, topic: 
   try {
     validateConnectionId(connectionId)
     validateTopicName(topic)
-    return ipcSuccess(await kafkaService.getTopicMetadata(connectionId, topic))
+    const metadata = await kafkaService.getTopicMetadata(connectionId, topic)
+    track('topic_opened', { partitions: metadata.partitions.length })
+    return ipcSuccess(metadata)
   } catch (error) {
     return ipcError(error)
   }
@@ -432,6 +437,7 @@ ipcMain.handle('kafka:createTopic', async (_, connectionId: string, config) => {
       validateTopicName(config.name)
     }
     await kafkaService.createTopic(connectionId, config)
+    track('topic_created', { partitions: config.numPartitions, replication_factor: config.replicationFactor })
     return ipcSuccess(undefined)
   } catch (error) {
     return ipcError(error)
@@ -443,6 +449,7 @@ ipcMain.handle('kafka:deleteTopic', async (_, connectionId: string, topic: strin
     validateConnectionId(connectionId)
     validateTopicName(topic)
     await kafkaService.deleteTopic(connectionId, topic)
+    track('topic_deleted')
     return ipcSuccess(undefined)
   } catch (error) {
     return ipcError(error)
@@ -454,7 +461,15 @@ ipcMain.handle('kafka:getMessages', async (_, connectionId: string, topic: strin
     validateConnectionId(connectionId)
     validateTopicName(topic)
     validateMessageOptions(options)
-    return ipcSuccess(await kafkaService.getMessages(connectionId, topic, options))
+    const result = await kafkaService.getMessages(connectionId, topic, options)
+    track('messages_fetched', {
+      count: result.messages.length,
+      limit: options?.limit ?? 100,
+      partition_filter: options?.partition !== undefined,
+      timestamp_filter: options?.fromTimestamp !== undefined,
+      paged: options?.fromOffsets !== undefined || options?.fromOffset !== undefined
+    })
+    return ipcSuccess(result)
   } catch (error) {
     return ipcError(error)
   }
@@ -465,7 +480,9 @@ ipcMain.handle('kafka:searchMessages', async (_, connectionId: string, topic: st
     validateConnectionId(connectionId)
     validateTopicName(topic)
     validateSearchOptions(options)
-    return ipcSuccess(await kafkaService.searchMessages(connectionId, topic, options))
+    const result = await kafkaService.searchMessages(connectionId, topic, options)
+    track('search_run', { scanned: result.scanned, matches: result.totalMatches, cancelled: result.cancelled, has_more: result.hasMore })
+    return ipcSuccess(result)
   } catch (error) {
     return ipcError(error)
   }
@@ -490,6 +507,7 @@ ipcMain.handle('kafka:produceMessage', async (_, connectionId: string, topic: st
     validateTopicName(topic)
     validateProduceMessage(message)
     await kafkaService.produceMessage(connectionId, topic, message)
+    track('message_produced', { has_key: !!message.key, has_headers: !!message.headers && Object.keys(message.headers).length > 0, to_partition: message.partition !== undefined })
     return ipcSuccess(undefined)
   } catch (error) {
     return ipcError(error)
@@ -520,6 +538,7 @@ ipcMain.handle('kafka:deleteConsumerGroup', async (_, connectionId: string, grou
     validateConnectionId(connectionId)
     validateGroupId(groupId)
     await kafkaService.deleteConsumerGroup(connectionId, groupId)
+    track('consumer_group_deleted')
     return ipcSuccess(undefined)
   } catch (error) {
     return ipcError(error)
@@ -537,6 +556,7 @@ ipcMain.handle('kafka:resetOffsets', async (_, connectionId: string, groupId: st
       throw new Error('Invalid partition list')
     }
     await kafkaService.resetOffsets(connectionId, groupId, topic, options)
+    track('offsets_reset', { type: options.type, all_partitions: options.partitions === undefined })
     return ipcSuccess(undefined)
   } catch (error) {
     return ipcError(error)
@@ -554,6 +574,7 @@ ipcMain.handle('kafka:deleteRecords', async (_, connectionId: string, topic: str
       throw new Error('Invalid partition offsets')
     }
     await kafkaService.deleteRecords(connectionId, topic, partitionOffsets)
+    track('records_deleted', { partitions: partitionOffsets.length })
     return ipcSuccess(undefined)
   } catch (error) {
     return ipcError(error)
@@ -571,13 +592,44 @@ ipcMain.handle('settings:get', () => {
 
 ipcMain.handle('settings:set', (_, patch) => {
   try {
-    if (patch == null || typeof patch !== 'object') throw new Error('Invalid settings')
-    for (const [key, value] of Object.entries(patch)) {
-      if (key !== 'telemetryEnabled' || typeof value !== 'boolean') {
-        throw new Error('Invalid settings')
-      }
-    }
-    return ipcSuccess(setSettings(patch))
+    validateSettingsPatch(patch)
+    const before = getSettings()
+    const after = setSettings(patch)
+    for (const [key, value] of Object.entries(patch)) track('settings_changed', { key, value: String(value) })
+    if (!before.telemetryEnabled && after.telemetryEnabled) void sendHeartbeat('enabled')
+    if (before.telemetryEnabled && !after.telemetryEnabled) clearTelemetryQueue()
+    autoUpdater.allowPrerelease = after.allowPrerelease
+    return ipcSuccess(after)
+  } catch (error) {
+    return ipcError(error)
+  }
+})
+
+ipcMain.handle('settings:resetInstallId', () => {
+  try {
+    resetInstallId()
+    return ipcSuccess(undefined)
+  } catch (error) {
+    return ipcError(error)
+  }
+})
+
+ipcMain.handle('settings:openDataFolder', async () => {
+  try {
+    await openDataFolder()
+    return ipcSuccess(undefined)
+  } catch (error) {
+    return ipcError(error)
+  }
+})
+
+// Only the project's own GitHub pages may be opened from the renderer
+const ALLOWED_EXTERNAL_PREFIX = 'https://github.com/exitCodeNihil/topiq-explorer'
+ipcMain.handle('shell:openExternal', async (_, url: unknown) => {
+  try {
+    if (typeof url !== 'string' || !url.startsWith(ALLOWED_EXTERNAL_PREFIX)) throw new Error('URL not allowed')
+    await shell.openExternal(url)
+    return ipcSuccess(undefined)
   } catch (error) {
     return ipcError(error)
   }

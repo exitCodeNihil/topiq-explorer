@@ -73,7 +73,7 @@ export function OffsetManager({ groupId, topic, partitions, onClose }: OffsetMan
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 px-6 py-4">
       <div className="space-y-2">
         <Label>Reset To</Label>
         <Select value={resetType} onValueChange={(v) => setResetType(v as typeof resetType)}>
@@ -113,14 +113,16 @@ export function OffsetManager({ groupId, topic, partitions, onClose }: OffsetMan
             </Button>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 rounded-md border border-border p-3">
+        <div className="flex flex-wrap gap-2 rounded-md border border-border-mute p-3">
           {partitions.map((partition) => (
             <button
               key={partition.partition}
-              className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+              type="button"
+              aria-pressed={selectedPartitions.includes(partition.partition)}
+              className={`rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar ${
                 selectedPartitions.includes(partition.partition)
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted hover:bg-muted/80'
+                  ? 'bg-accent-active font-medium text-bg-main'
+                  : 'bg-bg-panel text-text-primary hover:bg-bg-sidebar'
               }`}
               onClick={() => togglePartition(partition.partition)}
             >
@@ -128,7 +130,7 @@ export function OffsetManager({ groupId, topic, partitions, onClose }: OffsetMan
             </button>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground">{selectedPartitions.length} partition(s) selected</p>
+        <p className="text-xs text-text-secondary">{selectedPartitions.length} partition(s) selected</p>
       </div>
 
       <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">

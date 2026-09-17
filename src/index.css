@@ -2,16 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
+/* Design tokens live outside @layer so Tailwind never purges the .dark block (its only consumer is index.html). */
+:root {
+    color-scheme: light;
+    /* Project surface + text tokens (light) */
+    --bg-main: 0 0% 100%;
+    --bg-sidebar: 220 14% 97%;
+    --bg-panel: 220 14% 94%;
+    --border-mute: 220 13% 87%;
+    --text-primary: 222 47% 11%;
+    --text-secondary: 220 9% 46%;
+    --accent-active: 133 100% 32%;
+    --accent-violet: 270 55% 45%;
     --background: 220 14% 96%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 24 100% 50%;
-    --primary-foreground: 0 0% 98%;
+    --primary: 133 100% 32%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 220 14% 92%;
     --secondary-foreground: 222 47% 11%;
     --muted: 220 14% 92%;
@@ -26,7 +36,7 @@
     --warning-foreground: 38 92% 40%;
     --border: 220 13% 87%;
     --input: 220 13% 87%;
-    --ring: 142 100% 50%;
+    --ring: 133 100% 32%;
     --radius: 0.5rem;
     --sidebar: 220 14% 97%;
     --json-key: 199 89% 48%;
@@ -36,7 +46,17 @@
     --json-null: 215 16% 47%;
   }
 
-  .dark {
+.dark {
+    color-scheme: dark;
+    /* Project surface + text tokens (dark): the original hex values as HSL */
+    --bg-main: 216 16% 6%;
+    --bg-sidebar: 218 15% 10%;
+    --bg-panel: 220 15% 12%;
+    --border-mute: 220 12% 20%;
+    --text-primary: 240 6% 90%;
+    --text-secondary: 240 5% 65%;
+    --accent-active: 135 100% 50%;
+    --accent-violet: 273 68% 59%;
     --background: 220 18% 5%;
     --foreground: 240 5% 90%;
     --card: 220 14% 11%;
@@ -66,7 +86,6 @@
     --json-number: 48 96% 70%;
     --json-boolean: 270 67% 75%;
     --json-null: 215 16% 65%;
-  }
 }
 
 @layer base {
@@ -92,12 +111,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2D3139;
+  background: hsl(var(--border-mute));
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3D4149;
+  background: hsl(var(--text-secondary) / 0.5);
 }
 
 /* Electron window drag area */

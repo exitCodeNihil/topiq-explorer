@@ -8,10 +8,12 @@ import { ClusterDetails } from '../cluster/ClusterDetails'
 import { useConnectionStore } from '@/stores/connection.store'
 import { useTopicStore } from '@/stores/topic.store'
 import { useConsumerStore } from '@/stores/consumer.store'
-import { Terminal, Settings } from 'lucide-react'
+import { Terminal } from 'lucide-react'
 import { UpdateNotification } from '../updates/UpdateNotification'
 import { UpdateChecker } from '../updates/UpdateChecker'
-import { SettingsDialog } from '../settings/SettingsDialog'
+
+// macOS traffic lights sit over the title bar; other platforms have no inset
+const titleInset = window.api.platform === 'darwin' ? 'pl-16' : ''
 
 const tabs = [
   { id: 'topics', label: 'Topics' },
@@ -36,7 +38,6 @@ function EmptyState({ message }: { message: string }) {
 
 export function MainLayout() {
   const [activeTab, setActiveTab] = useState('topics')
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const activeConnectionId = useConnectionStore((state) => state.activeConnectionId)
   const connectionStatus = useConnectionStore((state) => state.connectionStatus)
   const connections = useConnectionStore((state) => state.connections)
@@ -57,7 +58,7 @@ export function MainLayout() {
     <div className="flex h-screen flex-col">
       {/* Title Bar */}
       <div className="drag-region flex h-12 items-center justify-between border-b border-border-mute bg-bg-sidebar px-4 shrink-0">
-        <div className="flex items-center gap-2 pl-16">
+        <div className={`flex items-center gap-2 ${titleInset}`}>
           <Terminal className="h-4 w-4 text-accent-active" />
           <span className="text-sm font-semibold text-text-primary">Topiq Explorer</span>
         </div>
@@ -88,7 +89,7 @@ export function MainLayout() {
                     <button
                       key={id}
                       onClick={() => setActiveTab(id)}
-                      className={`flex-1 py-3 text-xs font-medium transition-colors border-b-[2px] ${
+                      className={`flex-1 border-b-[2px] py-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-active ${
                         activeTab === id
                           ? 'text-text-primary border-accent-active bg-bg-main'
                           : 'text-text-secondary border-transparent hover:text-text-primary'
@@ -165,24 +166,13 @@ export function MainLayout() {
                 </>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              <UpdateChecker />
-              <button
-                type="button"
-                aria-label="Settings"
-                onClick={() => setSettingsOpen(true)}
-                className="text-text-secondary transition-colors hover:text-text-primary"
-              >
-                <Settings className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            <UpdateChecker />
           </div>
         </div>
       </div>
 
       {/* Update Notification */}
       <UpdateNotification />
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   )
 }

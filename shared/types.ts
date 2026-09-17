@@ -168,8 +168,32 @@ export interface UpdateCheckResult {
 }
 
 export interface AppSettings {
+  theme: 'dark' | 'light' | 'system'
+  messagePageSize: 50 | 100 | 200 | 500 | 1000
+  messageValueFormat: 'auto' | 'raw' // auto = pretty-print JSON when the value parses
+  timestampFormat: 'local' | 'utc' | 'relative'
+  checkUpdatesOnStartup: boolean
+  allowPrerelease: boolean
   telemetryEnabled: boolean
 }
+
+export const APP_SETTINGS_DEFAULTS: AppSettings = {
+  theme: 'dark',
+  messagePageSize: 100,
+  messageValueFormat: 'auto',
+  timestampFormat: 'local',
+  checkUpdatesOnStartup: true,
+  allowPrerelease: false,
+  telemetryEnabled: true
+}
+
+// Allowed values per key; booleans are validated by type. Used by the main-process IPC validator.
+export const APP_SETTING_OPTIONS = {
+  theme: ['dark', 'light', 'system'],
+  messagePageSize: [50, 100, 200, 500, 1000],
+  messageValueFormat: ['auto', 'raw'],
+  timestampFormat: ['local', 'utc', 'relative']
+} as const
 
 export interface DownloadProgress {
   bytesPerSecond: number
