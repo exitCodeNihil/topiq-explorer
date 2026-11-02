@@ -89,7 +89,7 @@ export function MainLayout() {
                     <button
                       key={id}
                       onClick={() => setActiveTab(id)}
-                      className={`flex-1 border-b-[2px] py-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-active ${
+                      className={`flex-1 border-b-2 py-3 text-xs font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-active ${
                         activeTab === id
                           ? 'text-text-primary border-accent-active bg-bg-main'
                           : 'text-text-secondary border-transparent hover:text-text-primary'

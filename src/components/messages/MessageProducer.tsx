@@ -154,7 +154,7 @@ export function MessageProducer({ topic, onClose }: MessageProducerProps) {
         </div>
         <textarea
           id="value"
-          className="h-48 w-full rounded-md border border-border-mute bg-bg-main px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-secondary/50 focus-visible:border-accent-active focus-visible:outline-none"
+          className="h-48 w-full rounded-md border border-border-mute bg-bg-main px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-secondary/50 focus-visible:border-accent-active focus-visible:outline-hidden"
           placeholder='{"example": "value"}'
           value={value}
           onChange={(e) => setValue(e.target.value)}

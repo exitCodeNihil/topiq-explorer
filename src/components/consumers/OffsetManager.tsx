@@ -119,7 +119,7 @@ export function OffsetManager({ groupId, topic, partitions, onClose }: OffsetMan
               key={partition.partition}
               type="button"
               aria-pressed={selectedPartitions.includes(partition.partition)}
-              className={`rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar ${
+              className={`rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar ${
                 selectedPartitions.includes(partition.partition)
                   ? 'bg-accent-active font-medium text-bg-main'
                   : 'bg-bg-panel text-text-primary hover:bg-bg-sidebar'

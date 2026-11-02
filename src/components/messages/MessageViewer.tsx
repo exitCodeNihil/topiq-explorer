@@ -655,7 +655,7 @@ export function MessageViewer() {
                     }
                   }}
                   onBlur={() => setSearchPageInput(String(searchPage))}
-                  className="w-12 text-center bg-transparent border border-transparent focus:border-border focus:outline-none rounded px-1"
+                  className="w-12 text-center bg-transparent border border-transparent focus:border-border focus:outline-hidden rounded px-1"
                 />
                 of {searchTotalPages}
               </span>
@@ -698,7 +698,7 @@ export function MessageViewer() {
                     }
                   }}
                   onBlur={() => setPageInput(String(currentPage))}
-                  className="w-12 text-center bg-transparent border border-transparent focus:border-border focus:outline-none rounded px-1"
+                  className="w-12 text-center bg-transparent border border-transparent focus:border-border focus:outline-hidden rounded px-1"
                   disabled={isLoadingMessages}
                 />
                 of {totalPages}
