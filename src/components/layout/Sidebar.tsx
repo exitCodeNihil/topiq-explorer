@@ -142,7 +142,7 @@ export function Sidebar() {
 
   return (
     <>
-      <div className="flex h-full w-[80px] flex-shrink-0 flex-col items-center border-r border-border-mute bg-bg-sidebar py-6">
+      <div className="flex h-full w-[80px] shrink-0 flex-col items-center border-r border-border-mute bg-bg-sidebar py-6">
         <ScrollArea className="flex-1 w-full">
           <div className="flex flex-col items-center gap-4">
             {connections.map((connection) => {
@@ -162,12 +162,12 @@ export function Sidebar() {
                 >
                   {/* Active left green bar */}
                   {isActive && isConnected && (
-                    <div className="absolute -left-[17px] top-1/2 -translate-y-1/2 w-0.5 h-8 bg-accent-active rounded-r" />
+                    <div className="absolute left-[-17px] top-1/2 -translate-y-1/2 w-0.5 h-8 bg-accent-active rounded-r" />
                   )}
 
                   {/* Button */}
                   <button
-                    className={`relative flex w-14 h-14 flex-col items-center justify-center rounded-lg text-[10px] font-mono transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar ${
+                    className={`relative flex w-14 h-14 flex-col items-center justify-center rounded-lg text-[10px] font-mono transition-all duration-200 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar ${
                       isActive && isConnected
                         ? 'bg-bg-panel border border-border-mute shadow-subtle text-text-primary'
                         : 'bg-transparent border border-transparent text-text-secondary hover:bg-bg-panel/50 hover:border-border-mute/50'
@@ -265,7 +265,7 @@ export function Sidebar() {
             setEditingConnection(null)
             setIsDialogOpen(true)
           }}
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-border-mute text-text-secondary transition-all duration-200 hover:border-accent-active hover:text-accent-active active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-dashed border-border-mute text-text-secondary transition-all duration-200 hover:border-accent-active hover:text-accent-active active:scale-95 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar"
         >
           <Plus className="h-5 w-5" />
         </button>
@@ -278,7 +278,7 @@ export function Sidebar() {
                 type="button"
                 aria-label="Settings"
                 onClick={() => setSettingsOpen(true)}
-                className="mt-2 flex h-10 w-10 items-center justify-center rounded-full text-text-secondary transition-all duration-200 hover:bg-bg-panel hover:text-text-primary active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar"
+                className="mt-2 flex h-10 w-10 items-center justify-center rounded-full text-text-secondary transition-all duration-200 hover:bg-bg-panel hover:text-text-primary active:scale-95 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar"
               >
                 <Settings className="h-5 w-5" />
               </button>

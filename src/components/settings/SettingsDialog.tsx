@@ -20,7 +20,7 @@ import { APP_SETTING_OPTIONS, type AppSettings } from '../../../shared/types'
 import { cn } from '@/lib/utils'
 
 const REPO = 'https://github.com/exitCodeNihil/topiq-explorer'
-const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar'
+const FOCUS = 'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar'
 
 interface SettingsDialogProps {
   open: boolean
@@ -30,7 +30,7 @@ interface SettingsDialogProps {
 const THEMES: { value: AppSettings['theme']; label: string; hint: string; swatch: string }[] = [
   { value: 'dark', label: 'Dark', hint: 'Always dark', swatch: 'bg-[#0D0F12] border-[#2D3139]' },
   { value: 'light', label: 'Light', hint: 'Always light', swatch: 'bg-white border-[#D1D5DB]' },
-  { value: 'system', label: 'System', hint: 'Follow the OS', swatch: 'bg-gradient-to-r from-[#0D0F12] from-50% to-white to-50% border-[#6B7280]' }
+  { value: 'system', label: 'System', hint: 'Follow the OS', swatch: 'bg-linear-to-r from-[#0D0F12] from-50% to-white to-50% border-[#6B7280]' }
 ]
 
 const PAGE_SIZES = APP_SETTING_OPTIONS.messagePageSize
@@ -128,7 +128,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                       className={cn(
                         'flex cursor-pointer flex-col gap-2 rounded-md border p-3 transition-colors',
                         active ? 'border-accent-active bg-bg-panel' : 'border-border-mute hover:bg-bg-panel',
-                        'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent-active has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-bg-sidebar'
+                        'has-focus-visible:ring-2 has-focus-visible:ring-accent-active has-focus-visible:ring-offset-2 has-focus-visible:ring-offset-bg-sidebar'
                       )}
                     >
                       <input

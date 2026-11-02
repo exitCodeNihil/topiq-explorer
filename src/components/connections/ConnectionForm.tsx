@@ -305,7 +305,7 @@ export function ConnectionForm({ connection, onClose }: ConnectionFormProps) {
               type="button"
               aria-expanded={advancedOpen}
               onClick={() => setAdvancedOpen(!advancedOpen)}
-              className="flex w-full items-center gap-2 rounded-sm py-2 text-xs text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar"
+              className="flex w-full items-center gap-2 rounded-sm py-2 text-xs text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-active focus-visible:ring-offset-2 focus-visible:ring-offset-bg-sidebar"
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
               <span>Advanced Options</span>

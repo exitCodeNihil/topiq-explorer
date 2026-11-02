@@ -1,91 +1,235 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@plugin 'tailwindcss-animate';
+
+@custom-variant dark (&:is(.dark *));
+
+@utility container {
+  margin-inline: auto;
+  padding-inline: 2rem;
+  @media (width >= --theme(--breakpoint-sm)) {
+    max-width: none;
+  }
+  @media (width >= 1400px) {
+    max-width: 1400px;
+  }
+}
+
+@theme {
+  --font-sans: Inter, system-ui, -apple-system, sans-serif;
+  --font-mono: JetBrains Mono, SF Mono, Monaco, monospace;
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+
+  --color-sidebar: hsl(var(--sidebar));
+  --color-bg-main: hsl(var(--bg-main));
+  --color-bg-sidebar: hsl(var(--bg-sidebar));
+  --color-bg-panel: hsl(var(--bg-panel));
+  --color-border-mute: hsl(var(--border-mute));
+  --color-text-primary: hsl(var(--text-primary));
+  --color-text-secondary: hsl(var(--text-secondary));
+  --color-accent-active: hsl(var(--accent-active));
+  --color-accent-violet: hsl(var(--accent-violet));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-glow-green:
+    0 0 12px hsl(var(--accent-active) / 0.3),
+    0 0 4px hsl(var(--accent-active) / 0.2);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-slide-in-from-left: slide-in-from-left 0.2s ease-out;
+  --animate-slide-in-from-right: slide-in-from-right 0.2s ease-out;
+  --animate-spin-slow: spin-slow 8s linear infinite;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes slide-in-from-left {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+  @keyframes slide-in-from-right {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+  @keyframes spin-slow {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
 
 /* Design tokens live outside @layer so Tailwind never purges the .dark block (its only consumer is index.html). */
 :root {
-    color-scheme: light;
-    /* Project surface + text tokens (light) */
-    --bg-main: 0 0% 100%;
-    --bg-sidebar: 220 14% 97%;
-    --bg-panel: 220 14% 94%;
-    --border-mute: 220 13% 87%;
-    --text-primary: 222 47% 11%;
-    --text-secondary: 220 9% 46%;
-    --accent-active: 133 100% 32%;
-    --accent-violet: 270 55% 45%;
-    --background: 220 14% 96%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 133 100% 32%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 92%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 220 14% 92%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 220 14% 92%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --success: 142 71% 45%;
-    --success-foreground: 142 76% 36%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 38 92% 40%;
-    --border: 220 13% 87%;
-    --input: 220 13% 87%;
-    --ring: 133 100% 32%;
-    --radius: 0.5rem;
-    --sidebar: 220 14% 97%;
-    --json-key: 199 89% 48%;
-    --json-string: 142 71% 45%;
-    --json-number: 38 92% 50%;
-    --json-boolean: 270 67% 47%;
-    --json-null: 215 16% 47%;
-  }
+  color-scheme: light;
+  /* Project surface + text tokens (light) */
+  --bg-main: 0 0% 100%;
+  --bg-sidebar: 220 14% 97%;
+  --bg-panel: 220 14% 94%;
+  --border-mute: 220 13% 87%;
+  --text-primary: 222 47% 11%;
+  --text-secondary: 220 9% 46%;
+  --accent-active: 133 100% 32%;
+  --accent-violet: 270 55% 45%;
+  --background: 220 14% 96%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 133 100% 32%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 92%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 220 14% 92%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 220 14% 92%;
+  --accent-foreground: 222 47% 11%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --success: 142 71% 45%;
+  --success-foreground: 142 76% 36%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 38 92% 40%;
+  --border: 220 13% 87%;
+  --input: 220 13% 87%;
+  --ring: 133 100% 32%;
+  --radius: 0.5rem;
+  --sidebar: 220 14% 97%;
+  --json-key: 199 89% 48%;
+  --json-string: 142 71% 45%;
+  --json-number: 38 92% 50%;
+  --json-boolean: 270 67% 47%;
+  --json-null: 215 16% 47%;
+}
 
 .dark {
-    color-scheme: dark;
-    /* Project surface + text tokens (dark): the original hex values as HSL */
-    --bg-main: 216 16% 6%;
-    --bg-sidebar: 218 15% 10%;
-    --bg-panel: 220 15% 12%;
-    --border-mute: 220 12% 20%;
-    --text-primary: 240 6% 90%;
-    --text-secondary: 240 5% 65%;
-    --accent-active: 135 100% 50%;
-    --accent-violet: 273 68% 59%;
-    --background: 220 18% 5%;
-    --foreground: 240 5% 90%;
-    --card: 220 14% 11%;
-    --card-foreground: 240 5% 90%;
-    --popover: 220 16% 10%;
-    --popover-foreground: 240 5% 90%;
-    --primary: 133 100% 50%;
-    --primary-foreground: 220 18% 5%;
-    --secondary: 220 14% 11%;
-    --secondary-foreground: 240 5% 90%;
-    --muted: 220 14% 11%;
-    --muted-foreground: 240 4% 66%;
-    --accent: 220 14% 11%;
-    --accent-foreground: 240 5% 90%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 240 5% 90%;
-    --success: 142 71% 45%;
-    --success-foreground: 142 76% 73%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 48 96% 70%;
-    --border: 220 10% 18%;
-    --input: 220 10% 18%;
-    --ring: 133 100% 50%;
-    --sidebar: 220 16% 10%;
-    --json-key: 199 89% 72%;
-    --json-string: 142 76% 73%;
-    --json-number: 48 96% 70%;
-    --json-boolean: 270 67% 75%;
-    --json-null: 215 16% 65%;
+  color-scheme: dark;
+  /* Project surface + text tokens (dark): the original hex values as HSL */
+  --bg-main: 216 16% 6%;
+  --bg-sidebar: 218 15% 10%;
+  --bg-panel: 220 15% 12%;
+  --border-mute: 220 12% 20%;
+  --text-primary: 240 6% 90%;
+  --text-secondary: 240 5% 65%;
+  --accent-active: 135 100% 50%;
+  --accent-violet: 273 68% 59%;
+  --background: 220 18% 5%;
+  --foreground: 240 5% 90%;
+  --card: 220 14% 11%;
+  --card-foreground: 240 5% 90%;
+  --popover: 220 16% 10%;
+  --popover-foreground: 240 5% 90%;
+  --primary: 133 100% 50%;
+  --primary-foreground: 220 18% 5%;
+  --secondary: 220 14% 11%;
+  --secondary-foreground: 240 5% 90%;
+  --muted: 220 14% 11%;
+  --muted-foreground: 240 4% 66%;
+  --accent: 220 14% 11%;
+  --accent-foreground: 240 5% 90%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 240 5% 90%;
+  --success: 142 71% 45%;
+  --success-foreground: 142 76% 73%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 48 96% 70%;
+  --border: 220 10% 18%;
+  --input: 220 10% 18%;
+  --ring: 133 100% 50%;
+  --sidebar: 220 16% 10%;
+  --json-key: 199 89% 72%;
+  --json-string: 142 76% 73%;
+  --json-number: 48 96% 70%;
+  --json-boolean: 270 67% 75%;
+  --json-null: 215 16% 65%;
 }
 
 @layer base {
