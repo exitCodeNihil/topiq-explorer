@@ -63,7 +63,7 @@
     "postcss": "^8.5.32",
     "tailwindcss": "^4.3.4",
     "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5.3.3",
+    "typescript": "^7.0.2",
     "vite": "^6.4.4",
     "vite-plugin-electron": "^0.28.0",
     "vite-plugin-electron-renderer": "^1.0.0"
